@@ -62,7 +62,7 @@ Key points:
 
 ## 2. Zone registry
 
-This table is the **source of truth** for URL ownership. Update it whenever a repo is added or claims a new prefix. Two apps must never claim the same prefix.
+The **source of truth** for URL ownership is the registry in the shared config package (`src/zones.mjs` in [`@connor-works/config`](#21-shared-config-package-connor-worksconfig)). The main site's rewrites, every app's lint rules and every app's route check read from it, and `validateZones()` rejects two apps claiming the same prefix. The table below is a readable summary; keep it in sync with `zones.mjs`.
 
 | Repo | Railway service | Owns path prefixes | Asset prefix | Cookie prefix | Database | Status |
 |---|---|---|---|---|---|---|
@@ -80,12 +80,36 @@ connor-works/                                  ← git repo: wbconnor/connor-wor
 ├── railway.json
 ├── docker-compose.yml                         ← local Postgres for all apps (§11)
 ├── docker/postgres-init/01-databases.sql      ← local roles + databases (§11)
+├── .claude/skills/new-child-app/             ← Claude Code skill: adds a child app end to end (§10)
+├── connor-works-config/                       ← separate git repo: wbconnor/connor-works-config, ignored here (§2.1)
 └── meridian-underground/                      ← separate git repo: wbconnor/meridian-underground, ignored here
     ├── DESIGN.md                              ← Meridian Underground design doc
     └── AGENTS.md, CLAUDE.md
 ```
 
 The root repo is the **main site**. It also holds the documents and tooling that span every app: this file and the shared local Postgres setup. Each child app is its own repo, cloned inside this folder and listed in the root `.gitignore` so its files aren't committed twice. App-specific design docs live in each app's repo (e.g. `meridian-underground/DESIGN.md`). Because child apps sit inside the main site's folder, the main site's tooling must be told to ignore them (§5.5).
+
+### 2.1 Shared config package (`@connor-works/config`)
+
+A small public repo, [`wbconnor/connor-works-config`](https://github.com/wbconnor/connor-works-config), that **every app installs**, including the main site. It contains:
+
+| Import | What it provides |
+|---|---|
+| `@connor-works/config` | The zone registry (`zones`), `getZone()`, `ownerOf(path)`, `validateZones()`, `workspaceFolders` |
+| `@connor-works/config/next` | `zoneRewrites()` for the main site's `next.config.ts`; `childNextConfig(app, __dirname)` for child apps |
+| `@connor-works/config/eslint` | `connorWorks({ app })`: `eslint-config-next` plus the custom rules `no-request-host`, `cookie-prefix` and `no-cross-zone-link` |
+| `@connor-works/config/routes` | `findRouteViolations({ app, appDir })`, used in each app's route-prefix test |
+
+- **Installing:** apps install it from GitHub by tag, as a regular dependency, since `next.config.ts` imports it at runtime:
+  ```bash
+  pnpm add "github:wbconnor/connor-works-config#v0.1.0"
+  ```
+- **Pinned tags:** each app pins a tag, so a change reaches an app only when you bump its tag.
+- **New child app:** add it to `zones.mjs`, release a new tag, and bump the tag in the main site (for the rewrites) plus any app that links to the new one.
+- **Everything is public**, so Railway and CI need no tokens. Never put secrets in it.
+- **Locally**, it's cloned at `connor-works/connor-works-config/` and ignored by the root repo, like the child apps.
+
+See the package's `README.md` for usage and the release steps.
 
 ---
 
@@ -191,31 +215,18 @@ If the main site uses a database, add `"preDeployCommand": ["pnpm prisma migrate
 
 ### 5.2 Rewrites, written so the site deploys before any child app exists
 
-Each child app's rewrites are added only when its URL variable is set. That means the main site can launch on its own, and you turn on a child app just by adding one variable.
+The rewrites are generated from the registry (§2.1). A child app's rewrites are added only when its `urlEnv` variable (e.g. `MERIDIAN_UNDERGROUND_URL`) is set, so the main site can launch on its own, and you turn on a child app just by adding one variable.
 
 ```ts
 // connor-works/next.config.ts (main site, repo root)
 import type { NextConfig } from 'next';
-
-// Child app registry. Keep in sync with connor-works ARCHITECTURE.md §2.
-const zones = [
-  {
-    url: process.env.MERIDIAN_UNDERGROUND_URL, // http://meridian-underground.railway.internal:3000
-    prefixes: ['/meridian-underground', '/movie-night', '/movie-collection', '/mu-static'],
-  },
-];
+import { zoneRewrites } from '@connor-works/config/next';
 
 const nextConfig: NextConfig = {
+  // For each child app whose *_URL is set: `${prefix}/:path*` → `${url}${prefix}/:path*`
+  // for every prefix plus its asset prefix. (`:path*` also matches the bare prefix.)
   async rewrites() {
-    return zones
-      .filter((zone) => zone.url)
-      .flatMap((zone) =>
-        // `:path*` also matches the bare prefix (e.g. `/movie-night`)
-        zone.prefixes.map((prefix) => ({
-          source: `${prefix}/:path*`,
-          destination: `${zone.url}${prefix}/:path*`,
-        })),
-      );
+    return zoneRewrites();
   },
 };
 
@@ -252,12 +263,13 @@ Only one app can answer `/robots.txt`, `/sitemap.xml`, `/favicon.ico`, and unkno
 
 Child app folders sit inside the main site's folder locally, but they're git-ignored, so Railway never sees them. Local tools that scan the folder tree will still find them unless told not to:
 
-- **`.gitignore`:** list every child app folder (`meridian-underground/`), along with the usual `node_modules/`, `.next/` and `.env*`.
-- **`tsconfig.json`:** add each child app folder to `exclude` (e.g. `"exclude": ["node_modules", "meridian-underground"]`). Otherwise the main site type-checks the child app's code.
-- **ESLint / Prettier / Vitest / Playwright:** add the child app folders to their ignore patterns or test roots.
+- **`.gitignore`:** list every nested repo folder (`connor-works-config/`, `meridian-underground/`), along with the usual `node_modules/`, `.next/` and `.env*`.
+- **`tsconfig.json`:** add each nested repo folder to `exclude` (e.g. `"exclude": ["node_modules", "connor-works-config", "meridian-underground"]`). Otherwise the main site type-checks their code.
+- **ESLint:** `connorWorks({ app: 'main-site' })` ignores every folder in the registry's `workspaceFolders` automatically.
+- **Prettier / Vitest / Playwright:** add the nested repo folders to their ignore patterns or test roots.
 - **Tailwind v4** skips git-ignored files automatically. With an explicit `@source` or `content` config, keep it pointed at the main site's own folders.
 - **No `pnpm-workspace.yaml` at the root.** The apps are separate projects, not a pnpm workspace. Each has its own `package.json`, lockfile and `node_modules`.
-- **Pin the Next.js root in each child app:** set `outputFileTracingRoot: __dirname` and `turbopack: { root: __dirname }` in its `next.config.ts` (§7.2). When Next.js finds the main site's lockfile in a parent folder, it may otherwise treat `connor-works/` as the project root. On Railway the child app is cloned alone, so this only matters locally, but it's harmless there.
+- **Pin the Next.js root in each child app:** `childNextConfig(app, __dirname)` sets `outputFileTracingRoot` and `turbopack.root` (§7.2). When Next.js finds the main site's lockfile in a parent folder, it may otherwise treat `connor-works/` as the project root. On Railway the child app is cloned alone, so this only matters locally, but it's harmless there.
 
 ---
 
@@ -310,19 +322,25 @@ Using Meridian Underground as the example.
 ### 7.2 `next.config.ts` for a child app
 
 ```ts
-const nextConfig = {
-  assetPrefix: process.env.NODE_ENV === 'production' ? '/mu-static' : undefined,
-  images: { unoptimized: true },
-  // Nested inside the main site's folder locally; stop Next.js from using the parent as the root (§5.5)
-  outputFileTracingRoot: __dirname,
-  turbopack: { root: __dirname },
-  experimental: {
-    serverActions: {
-      allowedOrigins: (process.env.ALLOWED_ORIGINS ?? '').split(',').filter(Boolean),
-    },
-  },
+import type { NextConfig } from 'next';
+import { childNextConfig } from '@connor-works/config/next';
+
+const base = childNextConfig('meridian-underground', __dirname);
+
+const nextConfig: NextConfig = {
+  ...base,
+  // App-specific settings. Merge nested objects (e.g. `experimental`) with `base` instead of replacing them.
 };
+
+export default nextConfig;
 ```
+
+`childNextConfig` reads the app's registry entry and sets the following:
+
+- `assetPrefix` (production only)
+- `images.unoptimized`
+- `serverActions.allowedOrigins` (from `ALLOWED_ORIGINS`)
+- the pinned project root (`outputFileTracingRoot`, `turbopack.root`; see §5.5)
 
 - **No `/` redirect.** The main site owns `/`.
 - `assetPrefix` moves build assets to `/mu-static/_next/...` so the main site can forward that one prefix. Check this once in the browser's Network tab: the `.js` files should load from `/mu-static/_next/`.
@@ -387,21 +405,35 @@ Use **`http://`**: private-network traffic stays inside Railway and has no TLS. 
 9. **Health check under your own prefix** (e.g. `/meridian-underground/api/health`), set in `railway.json`.
 10. **Bind to `::`** (`next start -H ::`) so the private network can reach the app.
 
+Rules 1–7 are set up or enforced by `@connor-works/config` (§2.1):
+- The `connorWorks()` ESLint config catches request-host reads, unprefixed cookie names, and `next/link` into another app.
+- `findRouteViolations()` catches routes outside the app's prefixes.
+- `childNextConfig()` sets the asset prefix, allowed origins, and image settings.
+- The database role limits each app to its own database.
+
 ---
 
 ## 10. Adding a new child app
 
-Checklist for a future app (e.g. `/projects`):
+Use the **`new-child-app` Claude Code skill** in this repo (`.claude/skills/new-child-app/`). Start Claude in `connor-works/` and ask it to add a child app, or run `/new-child-app`. The skill is the source of truth for the procedure. It checks the new app's names and prefixes for collisions, and prepares everything locally. It asks before pushing anything, and ends with a checklist of the steps only you can do.
 
-- [ ] Pick its prefixes, an asset prefix (e.g. `/projects-static`), a cookie prefix, and a database name. Add a row to the [registry](#2-zone-registry).
-- [ ] Clone the new repo inside `connor-works/`, and add its folder to the root `.gitignore` and to the main site's `tsconfig.json` `exclude` and linter ignores (§5.5).
-- [ ] In the new repo: set `assetPrefix`, the pinned Next.js root (§5.5), `images.unoptimized`, and `allowedOrigins`. Add `railway.json` with a health check, and set `"start": "next start -H ::"`.
-- [ ] On the shared Postgres: `CREATE ROLE` + `CREATE DATABASE ... OWNER` (§4.1).
-- [ ] Add the same role and database to `docker/postgres-init/01-databases.sql` for local dev (§11).
-- [ ] In Railway: add the service to the `connor-works` project and set `PORT=3000`, `SITE_URL`, `ALLOWED_ORIGINS`, and `DATABASE_URL`.
-- [ ] In the main site: add the app to the `zones` array in `next.config.ts` and set its `*_URL` variable on `main-site`.
-- [ ] Update the main site's `robots.txt`, sitemap, and navigation.
-- [ ] Deploy the child app first, then the main site. Smoke-test through `connor.works`.
+In summary, it:
+
+1. **Collects** the app's prefixes, asset prefix, cookie prefix and database name, and checks them against `zones.mjs`.
+2. **Updates the config package:** adds the app to `zones.mjs` and bumps the version.
+3. **Scaffolds the child app** in `connor-works/<folder>/` from templates:
+   - installs `@connor-works/config`, and sets up `next.config.ts` and `eslint.config.mjs`
+   - adds the route-prefix test, `railway.json`, a health route and CI
+   - adds `AGENTS.md`/`CLAUDE.md` and `.claude/settings.json`
+4. **Updates the main site:** `.gitignore`, `tsconfig.json` `exclude`, the config package tag, and `robots.txt`.
+5. **Updates the docs:** this file's registry table (§2) and the root `AGENTS.md`.
+6. **Sets up the local database:** adds the app's role and database to `docker/postgres-init/01-databases.sql`, and creates them in the running container.
+7. **Hands off the manual steps:**
+   - create the GitHub repo and push, then push the package tag
+   - create the Railway service and set its variables
+   - run the production SQL (§4.1)
+   - set `<APP>_URL` on `main-site`
+   - smoke-test through `connor.works`
 
 ---
 
@@ -478,6 +510,14 @@ Notes:
 - **Upgrading Postgres major versions** (e.g. 17 → 18) needs a fresh volume: `pg_dump` anything you want to keep, then `docker compose down -v`. Note that the `postgres:18` image stores data at a different path (`/var/lib/postgresql`), so update the volume mount at the same time.
 - **Stop Postgres.app or Homebrew Postgres** if either is running, or change the host port. Otherwise the apps may connect to the wrong server.
 
+**Trying unreleased config package changes:** point an app at the local copy temporarily, then switch back to a tag before committing:
+
+```bash
+cd meridian-underground
+pnpm add ../connor-works-config                               # use the local package
+pnpm add "github:wbconnor/connor-works-config#v0.2.0"         # back to a released tag
+```
+
 **Testing the full setup locally:**
 
 ```bash
@@ -495,7 +535,7 @@ MERIDIAN_UNDERGROUND_URL=http://localhost:3001 pnpm dev   # from the workspace r
 
 | Symptom | Likely cause / fix |
 |---|---|
-| Child app page loads through connor.works but has no styling and JS 404s | The asset prefix isn't forwarded. Check that `/mu-static` is in the main site's `zones` prefixes and that `assetPrefix` is set in the child app. |
+| Child app page loads through connor.works but has no styling and JS 404s | The asset prefix isn't forwarded. Check that the child app's `assetPrefix` in `zones.mjs` matches what it serves, that the main site uses `zoneRewrites()` with the current package tag, and that the child app uses `childNextConfig()`. |
 | A child app URL shows the main site's 404 page | The main site has no rewrite for it. Check that the `*_URL` variable is set on `main-site` and that the main site redeployed after it was set. |
 | A child app URL shows a main-site page | The main site has a page under that prefix. Remove it (§5.2). |
 | RSVP/vote buttons fail with "Invalid Server Actions request" | `ALLOWED_ORIGINS` on the child app doesn't include the host you're browsing (`connor.works`, a Railway test domain, or `localhost:3000`). |
