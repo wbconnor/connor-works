@@ -4,7 +4,7 @@ This folder is the workspace for everything served at **https://connor.works**. 
 
 The **main site launches first** and owns the domain from day one. Child apps such as Meridian Underground are added behind it later. All apps share **one Postgres instance**, and each app gets its own database inside it.
 
-This README covers:
+This document covers:
 
 1. [How the pieces fit together](#1-how-the-pieces-fit-together)
 2. [Zone registry (who owns which URLs)](#2-zone-registry)
@@ -66,20 +66,26 @@ This table is the **source of truth** for URL ownership. Update it whenever a re
 
 | Repo | Railway service | Owns path prefixes | Asset prefix | Cookie prefix | Database | Status |
 |---|---|---|---|---|---|---|
-| `connor-works-site` *(name TBD)* | `main-site` | `/` and anything not listed below; `/robots.txt`, `/sitemap.xml`, `/favicon.ico` | *(none; uses `/_next`)* | `cw_` | `main_site` *(only if needed)* | Launching first |
+| [`wbconnor/connor-works`](https://github.com/wbconnor/connor-works) (workspace root) | `main-site` | `/` and anything not listed below; `/robots.txt`, `/sitemap.xml`, `/favicon.ico` | *(none; uses `/_next`)* | `cw_` | `main_site` *(only if needed)* | Launching first |
 | [`wbconnor/meridian-underground`](https://github.com/wbconnor/meridian-underground) | `meridian-underground` | `/meridian-underground`, `/movie-night`, `/movie-collection` | `/mu-static` | `mu_` | `meridian_underground` | In development |
 
-Suggested local layout for this folder:
+Local layout:
 
 ```
-connor-works/
-├── README.md                                  ← this file
-├── meridian-underground-design-document.md
-├── connor-works-site/                         ← git repo (main site)
-└── meridian-underground/                      ← git repo (child app)
+connor-works/                                  ← git repo: wbconnor/connor-works (the main site)
+├── .gitignore                                 ← lists every child app folder
+├── ARCHITECTURE.md                            ← this file (cross-repo architecture)
+├── AGENTS.md, CLAUDE.md                       ← instructions for AI agents
+├── app/, package.json, next.config.ts, ...    ← main site Next.js app (once scaffolded)
+├── railway.json
+├── docker-compose.yml                         ← local Postgres for all apps (§11)
+├── docker/postgres-init/01-databases.sql      ← local roles + databases (§11)
+└── meridian-underground/                      ← separate git repo: wbconnor/meridian-underground, ignored here
+    ├── DESIGN.md                              ← Meridian Underground design doc
+    └── AGENTS.md, CLAUDE.md
 ```
 
-This root folder isn't a git repo. If you want this README and the design docs versioned, either `git init` here as a small docs repo (and add the app folders to `.gitignore`), or move the README into the main site repo.
+The root repo is the **main site**. It also holds the documents and tooling that span every app: this file and the shared local Postgres setup. Each child app is its own repo, cloned inside this folder and listed in the root `.gitignore` so its files aren't committed twice. App-specific design docs live in each app's repo (e.g. `meridian-underground/DESIGN.md`). Because child apps sit inside the main site's folder, the main site's tooling must be told to ignore them (§5.5).
 
 ---
 
@@ -89,7 +95,7 @@ Use **one Railway project** named `connor-works` and put every service in it. Se
 
 | Service | Source | Public domain? | Notes |
 |---|---|---|---|
-| `main-site` | GitHub `connor-works-site` | **Yes**: `connor.works` (+ `www`) | The router. Deploy first. |
+| `main-site` | GitHub `wbconnor/connor-works` | **Yes**: `connor.works` (+ `www`) | The router. Deploy first. |
 | `Postgres` | Railway Postgres template | No | One instance, with a separate database per app (§4) |
 | `meridian-underground` | GitHub `wbconnor/meridian-underground` | Optional `*.up.railway.app` domain for testing only | Child app |
 
@@ -155,7 +161,7 @@ On the `meridian-underground` service, add these variables:
 
 ## 5. Deploying the main site
 
-### 5.1 Config as code: `railway.json` in the main site repo
+### 5.1 Config as code: `railway.json` in the repo root
 
 ```json
 {
@@ -188,10 +194,10 @@ If the main site uses a database, add `"preDeployCommand": ["pnpm prisma migrate
 Each child app's rewrites are added only when its URL variable is set. That means the main site can launch on its own, and you turn on a child app just by adding one variable.
 
 ```ts
-// connor-works-site/next.config.ts
+// connor-works/next.config.ts (main site, repo root)
 import type { NextConfig } from 'next';
 
-// Child app registry. Keep in sync with README §2.
+// Child app registry. Keep in sync with connor-works ARCHITECTURE.md §2.
 const zones = [
   {
     url: process.env.MERIDIAN_UNDERGROUND_URL, // http://meridian-underground.railway.internal:3000
@@ -236,11 +242,22 @@ Only one app can answer `/robots.txt`, `/sitemap.xml`, `/favicon.ico`, and unkno
 
 ### 5.4 First-time setup
 
-1. **New Project** `connor-works` **→ Deploy from GitHub repo →** `connor-works-site`. Rename the service to `main-site`.
+1. **New Project** `connor-works` **→ Deploy from GitHub repo →** `wbconnor/connor-works`. Rename the service to `main-site`.
 2. **+ New → Database → PostgreSQL**. Leave the name as `Postgres`. You can add it now, or wait until the first app needs a database.
 3. Set `SITE_URL=https://connor.works` on `main-site`.
 4. **Settings → Networking → Generate Domain** to get a `*.up.railway.app` URL. Check that the site and `/api/health` work there.
 5. Attach `connor.works` (§6).
+
+### 5.5 Keeping nested child apps out of the main site's tooling
+
+Child app folders sit inside the main site's folder locally, but they're git-ignored, so Railway never sees them. Local tools that scan the folder tree will still find them unless told not to:
+
+- **`.gitignore`:** list every child app folder (`meridian-underground/`), along with the usual `node_modules/`, `.next/` and `.env*`.
+- **`tsconfig.json`:** add each child app folder to `exclude` (e.g. `"exclude": ["node_modules", "meridian-underground"]`). Otherwise the main site type-checks the child app's code.
+- **ESLint / Prettier / Vitest / Playwright:** add the child app folders to their ignore patterns or test roots.
+- **Tailwind v4** skips git-ignored files automatically. With an explicit `@source` or `content` config, keep it pointed at the main site's own folders.
+- **No `pnpm-workspace.yaml` at the root.** The apps are separate projects, not a pnpm workspace. Each has its own `package.json`, lockfile and `node_modules`.
+- **Pin the Next.js root in each child app:** set `outputFileTracingRoot: __dirname` and `turbopack: { root: __dirname }` in its `next.config.ts` (§7.2). When Next.js finds the main site's lockfile in a parent folder, it may otherwise treat `connor-works/` as the project root. On Railway the child app is cloned alone, so this only matters locally, but it's harmless there.
 
 ---
 
@@ -296,6 +313,9 @@ Using Meridian Underground as the example.
 const nextConfig = {
   assetPrefix: process.env.NODE_ENV === 'production' ? '/mu-static' : undefined,
   images: { unoptimized: true },
+  // Nested inside the main site's folder locally; stop Next.js from using the parent as the root (§5.5)
+  outputFileTracingRoot: __dirname,
+  turbopack: { root: __dirname },
   experimental: {
     serverActions: {
       allowedOrigins: (process.env.ALLOWED_ORIGINS ?? '').split(',').filter(Boolean),
@@ -320,7 +340,7 @@ const nextConfig = {
    | `MU_DB_PASSWORD`, `DATABASE_URL` | see §4.2 |
    | `SITE_URL` | `https://connor.works` |
    | `ALLOWED_ORIGINS` | `connor.works` (add the main site's `*.up.railway.app` host while testing, if needed) |
-   | `SESSION_SECRET`, `TMDB_API_READ_TOKEN`, `R2_*`, `THEATER_TIMEZONE` | see design doc §12.2 |
+   | `SESSION_SECRET`, `TMDB_API_READ_TOKEN`, `R2_*`, `THEATER_TIMEZONE` | see `meridian-underground/DESIGN.md` §12.2 |
 4. Optionally generate a `*.up.railway.app` domain for testing the app directly. It's harmless to keep, because all links and OG URLs are built from `SITE_URL`.
 5. Deploy, and check that the health check passes.
 
@@ -374,7 +394,8 @@ Use **`http://`**: private-network traffic stays inside Railway and has no TLS. 
 Checklist for a future app (e.g. `/projects`):
 
 - [ ] Pick its prefixes, an asset prefix (e.g. `/projects-static`), a cookie prefix, and a database name. Add a row to the [registry](#2-zone-registry).
-- [ ] In the new repo: set `assetPrefix`, `images.unoptimized`, and `allowedOrigins`. Add `railway.json` with a health check, and set `"start": "next start -H ::"`.
+- [ ] Clone the new repo inside `connor-works/`, and add its folder to the root `.gitignore` and to the main site's `tsconfig.json` `exclude` and linter ignores (§5.5).
+- [ ] In the new repo: set `assetPrefix`, the pinned Next.js root (§5.5), `images.unoptimized`, and `allowedOrigins`. Add `railway.json` with a health check, and set `"start": "next start -H ::"`.
 - [ ] On the shared Postgres: `CREATE ROLE` + `CREATE DATABASE ... OWNER` (§4.1).
 - [ ] Add the same role and database to `docker/postgres-init/01-databases.sql` for local dev (§11).
 - [ ] In Railway: add the service to the `connor-works` project and set `PORT=3000`, `SITE_URL`, `ALLOWED_ORIGINS`, and `DATABASE_URL`.
@@ -395,7 +416,7 @@ pnpm dev            # http://localhost:3000/meridian-underground
 
 **Local database (Docker):** run one Postgres container for all apps, set up like production: one server, one database and one login per app. The apps themselves run directly on your Mac with `pnpm dev`. Only Postgres runs in Docker.
 
-Put these two files in this workspace root (next to this README), since the database is shared by every repo:
+Put these two files in the workspace root, next to `ARCHITECTURE.md`. The database is shared by every app, so they're committed to the connor-works repo rather than to any app repo:
 
 ```yaml
 # connor-works/docker-compose.yml
@@ -464,7 +485,7 @@ Notes:
 cd meridian-underground && pnpm build && PORT=3001 ALLOWED_ORIGINS=localhost:3000 pnpm start
 
 # terminal 2: main site pointing at the child app
-cd connor-works-site && MERIDIAN_UNDERGROUND_URL=http://localhost:3001 pnpm dev
+MERIDIAN_UNDERGROUND_URL=http://localhost:3001 pnpm dev   # from the workspace root
 # browse http://localhost:3000/meridian-underground
 ```
 
