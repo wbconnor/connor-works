@@ -25,6 +25,8 @@ export const metadata: Metadata = {
     url: '/',
     type: 'website',
   },
+  // Uses the Open Graph image from app/opengraph-image.tsx
+  twitter: { card: 'summary_large_image' },
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
