@@ -118,7 +118,7 @@ From the workspace root:
 1. Add `<folder>/` to the root `.gitignore`.
 2. If `tsconfig.json` exists at the root, add `<folder>` to its `exclude`. Do the same for any Prettier or test-runner ignore lists. ESLint needs no change, because `connorWorks({ app: 'main-site' })` ignores registry folders.
 3. If the main site depends on `@connor-works/config`, bump it to the new tag (or the local folder, per step 3.5). The main site's rewrites come from `zoneRewrites()`, so no rewrite code changes.
-4. If the main site has a `robots.txt`/`robots.ts`, ask which of the app's paths should be disallowed, and add them.
+4. Ask which of the app's paths should be disallowed, and add a block for `<app>` to `childAppDisallow` in `app/robots.ts` (use `[]` if none). The main site's tests fail until every registry app has a block.
 5. **Add a home page card** (`DESIGN.md` §5). Append an entry to the `projects` array in `app/projects.ts`, matching its `Project` type:
    - `app`: `<app>`; `title`, `description`: from the inputs; `href`: `<first prefix>`
    - `image`, `imageAlt`: the card image input (default `/projects/placeholder.webp`)

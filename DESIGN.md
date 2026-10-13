@@ -267,7 +267,8 @@ Implement the endpoint exactly as specified in `ARCHITECTURE.md` §12 (request b
   - apply a simple in-memory rate limit (e.g. 30 requests per minute across all callers; return `429`). The main site runs as one instance, so in-memory is enough.
 - **Provider wrapper:** `lib/notify/send-notification.ts` exports `sendNotification({ subject, text })` and is the only file that imports the Resend SDK.
 - **Not configured:** if `RESEND_API_KEY`, `NOTIFY_EMAIL_FROM`, `NOTIFY_EMAIL_TO` or `NOTIFY_API_KEY` is missing, the route returns `503` and logs one warning. The site must still build and run without them, because notifications are optional (`DEPLOY.md` §1.9).
-- **Runtime:** Node.js runtime (`export const runtime = 'nodejs'`), `POST` only; other methods return `405`.
+- **Runtime:** Node.js runtime (the default; with `cacheComponents` on, a `runtime` export is a build error, so there isn't one), `POST` only; other methods return `405`.
+- **Order of checks:** rate limit (`429`), configuration (`503`), key (`401`), body (`400`). Rate limiting first also limits key guessing. A provider failure is logged and returns `502`.
 - **Tests:** `401` on missing/wrong key, `400` on bad body or oversized `text`, `429` when rate-limited, `503` when not configured, `202` on success with `sendNotification` mocked.
 
 No child app calls this yet (Meridian Underground's v1 has no notifications), but it's small and specified, so it's built in v1.
@@ -309,16 +310,21 @@ Include `/` plus the `href` of every **visible** project (§5.2). Child apps tha
     layout.tsx, page.tsx, not-found.tsx, globals.css
     robots.ts, sitemap.ts, icon.svg, favicon.ico, opengraph-image.tsx
     projects.ts
-    _components/ascii-title.ts, project-card.tsx, project-grid.tsx
+    _components/ascii-title.ts, project-card.tsx, project-grid.tsx, footer.tsx
     api/health/route.ts
     api/notify/route.ts
   lib/
+    site.ts                ← siteUrl() from SITE_URL, site name and description
     projects.ts            ← visibleProjects()
+    notify/handler.ts      ← request checks; route.ts wires in the limiter and sender
+    notify/rate-limit.ts
     notify/send-notification.ts
     contrast.ts            ← used by the accent color test
+  assets/fonts/GeistMono-Regular.ttf   ← for the Open Graph image (OFL)
   public/projects/placeholder.webp
+  test/                    ← Vitest: route prefixes, cards, site files, /api/notify
   ```
-- Once scaffolded, add the `dev`, `build`, `lint` and `test` commands to `AGENTS.md`.
+- **Footer year:** with `cacheComponents`, `new Date()` can't run during prerendering, so the year comes from a `'use cache'` function with `cacheLife('days')`. The home page revalidates daily as a result.
 
 ---
 

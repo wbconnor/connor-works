@@ -79,7 +79,7 @@ connor-works/                                  ← git repo: wbconnor/connor-wor
 ├── DEPLOY.md                                  ← step-by-step deploy and maintenance instructions
 ├── DESIGN.md                                  ← main site design doc (home page, cards, /api/notify)
 ├── AGENTS.md, CLAUDE.md                       ← instructions for AI agents
-├── app/, package.json, next.config.ts, ...    ← main site Next.js app (once scaffolded)
+├── app/, package.json, next.config.ts, ...    ← main site Next.js app
 ├── railway.json
 ├── docker-compose.yml                         ← local Postgres for all apps (§11)
 ├── docker/postgres-init/01-databases.sql      ← local roles + databases (§11)
@@ -271,7 +271,7 @@ Child app folders sit inside the main site's folder locally, but they're git-ign
 - **ESLint:** `connorWorks({ app: 'main-site' })` ignores every folder in the registry's `workspaceFolders` automatically.
 - **Prettier / Vitest / Playwright:** add the nested repo folders to their ignore patterns or test roots.
 - **Tailwind v4** skips git-ignored files automatically. With an explicit `@source` or `content` config, keep it pointed at the main site's own folders.
-- **No `pnpm-workspace.yaml` at the root.** The apps are separate projects, not a pnpm workspace. Each has its own `package.json`, lockfile and `node_modules`.
+- **The root `pnpm-workspace.yaml` holds settings only.** The apps are separate projects, not a pnpm workspace: never add a `packages` list. Each has its own `package.json`, lockfile and `node_modules`. The file exists because pnpm 11+ reads settings such as `allowBuilds` only from `pnpm-workspace.yaml`, and installs fail without them. A child app's own `pnpm-workspace.yaml` (which `create-next-app` generates) stops pnpm from looking further up, so the root file doesn't affect it.
 - **Pin the Next.js root in each child app:** `childNextConfig(app, __dirname)` sets `outputFileTracingRoot` and `turbopack.root` (§7.2). When Next.js finds the main site's lockfile in a parent folder, it may otherwise treat `connor-works/` as the project root. On Railway the child app is cloned alone, so this only matters locally, but it's harmless there.
 
 ---
