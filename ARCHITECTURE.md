@@ -77,12 +77,13 @@ connor-works/                                  ← git repo: wbconnor/connor-wor
 ├── .gitignore                                 ← lists every child app folder
 ├── ARCHITECTURE.md                            ← this file (cross-repo architecture)
 ├── DEPLOY.md                                  ← step-by-step deploy and maintenance instructions
+├── DESIGN.md                                  ← main site design doc (home page, cards, /api/notify)
 ├── AGENTS.md, CLAUDE.md                       ← instructions for AI agents
 ├── app/, package.json, next.config.ts, ...    ← main site Next.js app (once scaffolded)
 ├── railway.json
 ├── docker-compose.yml                         ← local Postgres for all apps (§11)
 ├── docker/postgres-init/01-databases.sql      ← local roles + databases (§11)
-├── .claude/skills/new-child-app/             ← Claude Code skill: adds a child app end to end (§10)
+├── .claude/skills/new-child-app/              ← Claude Code skill: adds a child app end to end (§10)
 ├── connor-works-config/                       ← separate git repo: wbconnor/connor-works-config, ignored here (§2.1)
 └── meridian-underground/                      ← separate git repo: wbconnor/meridian-underground, ignored here
     ├── DESIGN.md                              ← Meridian Underground design doc
@@ -257,7 +258,7 @@ Only one app can answer `/robots.txt`, `/sitemap.xml`, `/favicon.ico`, and unkno
 
 1. **New Project** `connor-works` **→ Deploy from GitHub repo →** `wbconnor/connor-works`. Rename the service to `main-site`.
 2. **+ New → Database → PostgreSQL**. Leave the name as `Postgres`. You can add it now, or wait until the first app needs a database.
-3. Set `SITE_URL=https://connor.works` on `main-site`.
+3. Set `SITE_URL=https://connor.works` and `PORT=3000` on `main-site`. The port is pinned so child apps can call `/api/notify` (§12.3).
 4. **Settings → Networking → Generate Domain** to get a `*.up.railway.app` URL. Check that the site and `/api/health` work there.
 5. Attach `connor.works` (§6).
 
@@ -380,14 +381,14 @@ Use **`http://`**: private-network traffic stays inside Railway and has no TLS. 
 
 **Stage 1: launch the main site**
 - Deploy `main-site` (§5), attach `connor.works` (§6), and add the `Postgres` service.
-- Add a placeholder "Meridian Underground: coming soon" link or section if you want one. Don't create routes under `/meridian-underground` in the main site, because they would hide the child app's pages later (§5.2).
+- The home page shows its empty state ("Projects are on the way") until a child app's card becomes visible (`DESIGN.md` §5.2, §6.3). Don't create routes under `/meridian-underground` in the main site, because they would hide the child app's pages later (§5.2).
 
 **Stage 2: build Meridian Underground**
 - Develop locally (§11), and optionally deploy it to Railway without connecting it to the main site (skip §7.4). You can test it at its `*.up.railway.app` URL.
 
 **Stage 3: go live behind the main site**
 - Set `MERIDIAN_UNDERGROUND_URL` on `main-site` (§7.4).
-- Add Meridian Underground's rules to `robots.txt`, add its pages to the sitemap, and add navigation links (plain `<a>`).
+- Add Meridian Underground's rules to `robots.txt`. Its home page card (added by the `new-child-app` skill) and its sitemap entry appear automatically with this build, because both depend on `MERIDIAN_UNDERGROUND_URL` being set (`DESIGN.md` §5.2, §9.2).
 - Smoke-test on `https://connor.works`: `/meridian-underground`, an invitation link, an RSVP submit (a Server Action), admin login, and gallery images.
 
 **Rollback:** delete `MERIDIAN_UNDERGROUND_URL` from `main-site`. The rewrites disappear on the next deploy and the main site keeps running.
@@ -427,7 +428,7 @@ In summary, it:
    - installs `@connor-works/config`, and sets up `next.config.ts` and `eslint.config.mjs`
    - adds the route-prefix test, `railway.json`, a health route and CI
    - adds `AGENTS.md`/`CLAUDE.md` and `.claude/settings.json`
-4. **Updates the main site:** `.gitignore`, `tsconfig.json` `exclude`, the config package tag, and `robots.txt`.
+4. **Updates the main site:** `.gitignore`, `tsconfig.json` `exclude`, the config package tag, `robots.txt`, and the home page card in `app/projects.ts` (`DESIGN.md` §5).
 5. **Updates the docs:** this file's registry table (§2) and the root `AGENTS.md`.
 6. **Sets up the local database:** adds the app's role and database to `docker/postgres-init/01-databases.sql`, and creates them in the running container.
 7. **Hands off the manual steps:**
@@ -436,6 +437,7 @@ In summary, it:
    - run the production SQL (§4.1)
    - set `<APP>_URL` on `main-site`
    - smoke-test through `connor.works`
+   - add the home page card later, if the main site had no home page yet
 
 ---
 
@@ -483,8 +485,9 @@ volumes:
 CREATE ROLE meridian_underground LOGIN PASSWORD 'dev' CREATEDB;
 CREATE DATABASE meridian_underground OWNER meridian_underground;
 
-CREATE ROLE main_site LOGIN PASSWORD 'dev' CREATEDB;
-CREATE DATABASE main_site OWNER main_site;
+-- only if the main site gets a database (its registry entry has `database: null` for now):
+-- CREATE ROLE main_site LOGIN PASSWORD 'dev' CREATEDB;
+-- CREATE DATABASE main_site OWNER main_site;
 ```
 
 Each app's `.env` (not committed):
@@ -535,7 +538,7 @@ MERIDIAN_UNDERGROUND_URL=http://localhost:3001 pnpm dev   # from the workspace r
 
 ## 12. Admin notifications (email)
 
-Child apps sometimes need to alert the site admin (e.g. "new RSVP", "seed job failed"). Rather than each app integrating its own email provider, the **main site owns one notification endpoint**, `/api/notify`, and every app calls it over the private network — the same "go through the owning app's API" pattern as rule 6 in §9. Browser push isn't used for this: it would need a per-admin, per-browser permission grant and doesn't gain much over email at this site's scale.
+Child apps sometimes need to alert the site admin (e.g. "new RSVP", "seed job failed"). Rather than each app integrating its own email provider, the **main site owns one notification endpoint**, `/api/notify`, and every app calls it over the private network. This is the same "go through the owning app's API" pattern as rule 6 in §9. Browser push isn't used for this: it would need a per-admin, per-browser permission grant and doesn't gain much over email at this site's scale.
 
 ### 12.1 Email provider
 
@@ -553,8 +556,10 @@ Keep the provider call behind a small `sendNotification()` function in the main 
 ### 12.2 `/api/notify` endpoint (main site)
 
 - `POST /api/notify` only. Body: `{ "app": "meridian-underground", "subject": "...", "text": "..." }` — plain text, no templating.
-- Auth: `Authorization: Bearer <NOTIFY_API_KEY>` header, checked against the main site's `NOTIFY_API_KEY`. One shared secret is enough here since the endpoint is only reachable over Railway's private network; move to a key per app later if that stops being true.
-- The handler prefixes the subject with `[app]`, sends via `sendNotification()` to `NOTIFY_EMAIL_TO`, and returns `202` once accepted. Reject with `400` on a missing/oversized field and `401` on a bad or missing key. Cap `text` length (e.g. 4 KB) so a buggy child app can't flood the admin inbox.
+- **The endpoint is publicly reachable.** Child apps call it over the private network, but the main site holds the public `connor.works` domain, so `https://connor.works/api/notify` can also be reached from the internet. The bearer key and a rate limit are what protect it (`DESIGN.md` §8).
+- Auth: `Authorization: Bearer <NOTIFY_API_KEY>` header, checked against the main site's `NOTIFY_API_KEY` before the body is read, using a timing-safe comparison. One shared secret is enough at this scale; move to a key per app later if needed.
+- The handler prefixes the subject with `[app]`, sends via `sendNotification()` to `NOTIFY_EMAIL_TO`, and returns `202` once accepted. Cap `text` length (e.g. 4 KB) so a buggy child app can't flood the admin inbox.
+- Errors: `400` on a missing or oversized field, `401` on a bad or missing key, `405` for methods other than `POST`, `429` when rate-limited, and `503` when the email variables aren't configured.
 - Log failures server-side; don't retry. This is a low-volume, non-critical path, not a delivery-guaranteed queue.
 
 ### 12.3 Calling it from a child app
@@ -592,7 +597,7 @@ export async function notifyAdmin(subject: string, text: string) {
 ```
 
 - **Never await this on the critical path in a way that fails the user's request.** An RSVP or vote must still succeed even if the notification call times out or the main site is down.
-- Like database access (§4.3), this is a private-network-only call. Don't expose `/api/notify` outside it, and don't call it from the browser.
+- Always call it server-side over the private network (`MAIN_SITE_URL`), never from the browser. The key must never reach client code.
 
 ---
 
@@ -610,4 +615,4 @@ export async function notifyAdmin(subject: string, text: string) {
 | Redirect loop after adding the domain | Cloudflare SSL mode is "Flexible". Switch it to "Full". |
 | Pre-deploy (`prisma migrate deploy`) fails with "permission denied" or "database does not exist" | The role or database wasn't created, or the role doesn't own the database (§4.1). Check the database name and password in `DATABASE_URL`. |
 | "Too many connections" | The apps share one instance's connection limit. Add `?connection_limit=5` to each app's `DATABASE_URL`. |
-| Admin isn't receiving emails | Check the child app's `NOTIFY_API_KEY` matches `main-site`'s; check `main-site` logs for a `401`/`400` from `/api/notify`; check `RESEND_API_KEY` and `NOTIFY_EMAIL_FROM`'s sending domain are valid with the provider; check spam. |
+| Admin isn't receiving emails | Check the child app's `NOTIFY_API_KEY` matches `main-site`'s; check `main-site` logs for a `401`/`400`/`429` from `/api/notify`, or a `503` (email variables missing on `main-site`); check `RESEND_API_KEY` and `NOTIFY_EMAIL_FROM`'s sending domain are valid with the provider; check spam. |

@@ -42,8 +42,8 @@ The main site repo must be deployable:
 - [ ] `railway.json` at the repo root (`ARCHITECTURE.md` §5.1).
 - [ ] `"start": "next start -H ::"` in `package.json`.
 - [ ] A health route at `/api/health` that returns `200`.
-- [ ] `next.config.ts` uses `zoneRewrites()` (§5.2), and `@connor-works/config` is installed **from a pushed git tag**, not the local folder. Railway can't see `../connor-works-config`.
-- [ ] `robots.txt`, `sitemap.xml` and `favicon.ico` exist (§5.3).
+- [ ] `next.config.ts` uses `zoneRewrites()` (`ARCHITECTURE.md` §5.2), and `@connor-works/config` is installed **from a pushed git tag**, not the local folder. Railway can't see `../connor-works-config`.
+- [ ] `robots.txt`, `sitemap.xml` and `favicon.ico` exist (`ARCHITECTURE.md` §5.3, `DESIGN.md` §9).
 - [ ] Pushed to `main` on `wbconnor/connor-works`.
 
 ### 1.2 Create the Railway project and the main site service
@@ -248,7 +248,7 @@ At this point the app runs but isn't reachable through `connor.works`. That's fi
 
    Use `http://`: private-network traffic has no TLS.
 2. Click **Deploy**. The main site rebuilds; rewrites are evaluated at build time, so they only take effect with this new build.
-3. In the main site repo, if not already done: add the app's `Disallow` lines to `robots.txt`, its pages to the sitemap, and its home page card. Push.
+3. In the main site repo, if not already done: add the app's `Disallow` lines to `robots.txt` and its home page card to `app/projects.ts` (`DESIGN.md` §5.1). The `new-child-app` skill normally does both. Push. The card and the app's sitemap entry appear with the build from step 2, because both require the app's `urlEnv` to be set (`DESIGN.md` §5.2, §9.2).
 
 ### 2.6 Smoke test through `connor.works`
 
@@ -259,6 +259,7 @@ At this point the app runs but isn't reachable through `connor.works`. That's fi
 - [ ] Links, invitation URLs and OG images use `https://connor.works`.
 - [ ] Images from `img.connor.works` load.
 - [ ] `/robots.txt` includes the new rules.
+- [ ] The home page shows the app's card, linking to its first prefix, and `/sitemap.xml` lists that URL.
 
 ### 2.7 Undo
 
@@ -378,7 +379,7 @@ If connections run short, lower each app's `connection_limit` in its `DATABASE_U
    DROP DATABASE meridian_underground;
    DROP ROLE meridian_underground;
    ```
-5. Remove it from `zones.mjs` and release a tag. Bump the main site, and remove its `robots.txt` rules, sitemap entries and home page card. Update `ARCHITECTURE.md` §2, the root `AGENTS.md`, `.gitignore`/`tsconfig.json` excludes, and the local init SQL.
+5. Remove it from `zones.mjs` and release a tag. Bump the main site, and remove its `robots.txt` rules and its entry in `app/projects.ts` (its sitemap entry goes with the card). Update `ARCHITECTURE.md` §2, the root `AGENTS.md`, `.gitignore`/`tsconfig.json` excludes, and the local init SQL.
 
 ---
 

@@ -25,9 +25,11 @@ Ask for anything not given. Propose defaults, and confirm them all in one messag
 | Input | Example | Default / rule |
 |---|---|---|
 | `app` (slug) | `photo-journal` | Lowercase, hyphenated. Also the Railway service name and the folder name. |
-| Title | `Photo Journal` | Used in `AGENTS.md` |
-| One-line description | `a photo blog of road trips` | Used in `AGENTS.md` and the main site's home page card |
-| `tertiaryColor` | `#4A7B8C` | Hex. Highlight/hover color for the app's card on the main site home page (`DESIGN.md`). Take it from the child app's own design doc if it already defines a color palette (look for a token named `tertiary`, or the third brand color after the primary/accent pair); otherwise ask, or leave unset if the app has no palette yet. |
+| Title | `Photo Journal` | Used in `AGENTS.md` and as the home page card title |
+| One-line description | `A photo blog of road trips.` | Used in `AGENTS.md` and the home page card. One sentence, ≤ 140 characters (`DESIGN.md` §5.1). |
+| `tertiaryColor` | `#4A7B8C` | Hex. Accent for the app's home page card: the top bar and the hover/focus outline (`DESIGN.md` §5.5). Take it from the child app's own design doc if it already defines a color palette (look for a token named `tertiary`, or the third brand color after the primary/accent pair); otherwise ask, or leave unset if the app has no palette yet. It must have at least 3:1 contrast against `#E8E8E8` (the card `surface`); if it fails, say so and leave it unset so the default accent is used. |
+| Card image | `/projects/photo-journal.webp` | 16:9, 1200×675 WebP in the main site's `public/projects/`, plus a short alt text describing the image. Default: `/projects/placeholder.webp`. |
+| Listed | `true` | Whether the app gets a public card at all (`DESIGN.md` §5.2) |
 | `prefixes` | `/photos` | One or more single-segment prefixes |
 | `assetPrefix` | `/pj-static` | `/<short>-static` |
 | `cookiePrefix` | `pj_` | `<short>_` |
@@ -117,8 +119,13 @@ From the workspace root:
 2. If `tsconfig.json` exists at the root, add `<folder>` to its `exclude`. Do the same for any Prettier or test-runner ignore lists. ESLint needs no change, because `connorWorks({ app: 'main-site' })` ignores registry folders.
 3. If the main site depends on `@connor-works/config`, bump it to the new tag (or the local folder, per step 3.5). The main site's rewrites come from `zoneRewrites()`, so no rewrite code changes.
 4. If the main site has a `robots.txt`/`robots.ts`, ask which of the app's paths should be disallowed, and add them.
-5. **Add a home page card** (`DESIGN.md`: cards have a title, short description, image and a highlight/hover color from the child app's tertiary color). Find where the home page defines its list of cards and add an entry: `title`, `description` and `href` (`<first prefix>`) from the inputs, an image (ask for one, or reuse the placeholder the existing cards use), and `highlightColor` set to `tertiaryColor`.
-   - **If the main site has no home page yet** (not scaffolded), skip this and add it to the handoff checklist (step 8) instead.
+5. **Add a home page card** (`DESIGN.md` §5). Append an entry to the `projects` array in `app/projects.ts`, matching its `Project` type:
+   - `app`: `<app>`; `title`, `description`: from the inputs; `href`: `<first prefix>`
+   - `image`, `imageAlt`: the card image input (default `/projects/placeholder.webp`)
+   - `highlightColor`: `tertiaryColor`, omitted if unset or if it failed the contrast check
+   - `listed`: the listed input
+   - Append rather than insert: cards render newest first. The card stays hidden until `<urlEnv>` is set on `main-site` (`DESIGN.md` §5.2), so it's safe to add before the app is deployed. Run the main site's tests, including the accent contrast test.
+   - **If the main site has no `app/projects.ts` yet** (not scaffolded), skip this and add it to the handoff checklist (step 8) instead.
 6. **Update `ARCHITECTURE.md`:** add a row to the §2 registry table, and add the folder to the §2 local layout tree.
 7. **Update the root `AGENTS.md`:** add the app to the child app list under **Layout**.
 8. Show the root repo diff and ask before committing it.
@@ -150,10 +157,12 @@ Print this checklist, filled in with the real values, and list anything from ste
 2. Push the config package, if not done in step 3: `git -C connor-works-config push && git -C connor-works-config push --tags`. Then switch every local install to the tag: `pnpm add "github:wbconnor/connor-works-config#v<version>"` in `<folder>/` and in the main site.
 3. **Production database** (if any): run the §4.1 SQL on the Railway Postgres with a generated password:
    `CREATE ROLE <database> LOGIN PASSWORD '...'; CREATE DATABASE <database> OWNER <database>; REVOKE CONNECT ON DATABASE <database> FROM PUBLIC;`
-4. **Railway:** in the `connor-works` project, add a service from `<repo>` named `<app>`, and set its variables:
+4. **Railway:** in the `connor-works` project, add a service from `<repo>` named `<app>`, and set its variables (full table: `DEPLOY.md` §2.3):
    - `PORT=3000`, `SITE_URL=https://connor.works`, `ALLOWED_ORIGINS=connor.works`
-   - with a database: `DATABASE_URL`, per `ARCHITECTURE.md` §4.2
+   - with a database: `<APP>_DB_PASSWORD` and `DATABASE_URL`, per `ARCHITECTURE.md` §4.2
+   - if it sends admin notifications: `MAIN_SITE_URL` and `NOTIFY_API_KEY` (`ARCHITECTURE.md` §12.3)
+   - any app-specific variables from its `.env.example`
 5. Deploy it, and check that `<healthPath>` passes.
 6. On `main-site`, set `<urlEnv>` = `http://${{<app>.RAILWAY_PRIVATE_DOMAIN}}:${{<app>.PORT}}`, and redeploy the main site with the new config package tag.
-7. Smoke-test through `https://connor.works<first prefix>`: pages load with styling (assets from `<assetPrefix>/_next/`), links work, and any Server Actions succeed.
-8. **If step 5.5 was skipped** because the main site had no home page yet: once it exists, add `<app>`'s card (title, description, `<first prefix>`, an image, and `highlightColor: <tertiaryColor>`) to its card list.
+7. Smoke-test through `https://connor.works<first prefix>`: pages load with styling (assets from `<assetPrefix>/_next/`), links work, and any Server Actions succeed. If the app is listed, its card shows on the home page.
+8. **If step 5.5 was skipped** because the main site had no `app/projects.ts` yet: once it exists, append `<app>`'s entry (`app`, `title`, `description`, `href: '<first prefix>'`, `image`, `imageAlt`, `highlightColor: '<tertiaryColor>'`, `listed`) per `DESIGN.md` §5.1.

@@ -5,6 +5,7 @@ This repo (`wbconnor/connor-works`) is the **main site** for https://connor.work
 ## Read first
 
 - **`ARCHITECTURE.md`** explains how several repos share one domain: Next.js Multi-Zones, Railway services, DNS, the shared Postgres instance, and local dev. Read the relevant sections before changing routing, deployment, environment variables or databases, or before adding an app.
+- **`DESIGN.md`** is the main site's design spec: the home page, project cards (`app/projects.ts`), the 404 page, site-wide files and `/api/notify`.
 - **`DEPLOY.md`** has step-by-step deploy instructions: first-time setup (Railway, Postgres, Namecheap → Cloudflare DNS), deploying a new child app and its production database, and maintenance deploys.
 - **Zone registry:** `src/zones.mjs` in the shared config package `@connor-works/config` (`connor-works-config/` locally; `ARCHITECTURE.md` §2.1) is the source of truth for which app owns which URL prefixes. `ARCHITECTURE.md` §2 has a readable summary.
 
@@ -28,6 +29,15 @@ This repo (`wbconnor/connor-works`) is the **main site** for https://connor.work
 8. **Keep the registry and docs in sync.** When you change prefixes, services, environment variables or databases, update `zones.mjs` in the config package, `ARCHITECTURE.md` §2 and the affected sections together.
 
 Rules 1–5 are enforced by `@connor-works/config`: the `connorWorks()` ESLint config, the `findRouteViolations()` route test, and `childNextConfig()`. Don't disable those rules or tests to get past an error; fix the code, or change the registry if ownership really changed.
+
+## Commits during implementation
+
+- Commit without asking whenever you finish a logical unit of work: a scaffolded piece, a feature slice, a passing test suite, a refactor. Don't wait until the end.
+- Each commit should build, and lint and tests should pass if they exist. Don't commit broken work just to save progress.
+- Keep commits focused: one concern each, with a message in the imperative mood ("Add zone rewrites to next.config.ts").
+- Never commit to `main`. Work on a feature branch and create one if needed.
+- Child apps and `connor-works-config/` are separate repos. Commit their changes from inside their own folders, never from the root.
+- Don't push, open PRs, amend, rebase or force-push without asking.
 
 ## Adding a child app
 

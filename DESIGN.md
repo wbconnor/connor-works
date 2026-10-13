@@ -29,7 +29,7 @@ There is no header, navigation menu, login or database in v1.
 | Stack | Next.js (App Router), TypeScript, Tailwind CSS v4, pnpm |
 | Database | None. `database: null` in the zone registry stays as is |
 | Theme | Light only. Medium-light grey background, near-black text, monospace title |
-| H1 | "Connor dot works" rendered as ASCII art in the figlet **Small Slant** (`smslant`) font. See §12 Q1 to confirm the wording |
+| H1 | "Connor dot works" rendered as ASCII art in the figlet **Small Slant** (`smslant`) font (§6.1) |
 | Fonts | Geist Sans for body text, Geist Mono for the ASCII title, both via `next/font` |
 | Card data | A typed list in `app/projects.ts`, maintained by the `new-child-app` skill (§5) |
 | Card visibility | A card appears only if it is `listed` and its app's `urlEnv` is set at build time (§5.2) |
