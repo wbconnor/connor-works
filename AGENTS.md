@@ -5,6 +5,7 @@ This repo (`wbconnor/connor-works`) is the **main site** for https://connor.work
 ## Read first
 
 - **`ARCHITECTURE.md`** explains how several repos share one domain: Next.js Multi-Zones, Railway services, DNS, the shared Postgres instance, and local dev. Read the relevant sections before changing routing, deployment, environment variables or databases, or before adding an app.
+- **`DEPLOY.md`** has step-by-step deploy instructions: first-time setup (Railway, Postgres, Namecheap → Cloudflare DNS), deploying a new child app and its production database, and maintenance deploys.
 - **Zone registry:** `src/zones.mjs` in the shared config package `@connor-works/config` (`connor-works-config/` locally; `ARCHITECTURE.md` §2.1) is the source of truth for which app owns which URL prefixes. `ARCHITECTURE.md` §2 has a readable summary.
 
 ## Layout

@@ -26,7 +26,8 @@ Ask for anything not given. Propose defaults, and confirm them all in one messag
 |---|---|---|
 | `app` (slug) | `photo-journal` | Lowercase, hyphenated. Also the Railway service name and the folder name. |
 | Title | `Photo Journal` | Used in `AGENTS.md` |
-| One-line description | `a photo blog of road trips` | Used in `AGENTS.md` |
+| One-line description | `a photo blog of road trips` | Used in `AGENTS.md` and the main site's home page card |
+| `tertiaryColor` | `#4A7B8C` | Hex. Highlight/hover color for the app's card on the main site home page (`DESIGN.md`). Take it from the child app's own design doc if it already defines a color palette (look for a token named `tertiary`, or the third brand color after the primary/accent pair); otherwise ask, or leave unset if the app has no palette yet. |
 | `prefixes` | `/photos` | One or more single-segment prefixes |
 | `assetPrefix` | `/pj-static` | `/<short>-static` |
 | `cookiePrefix` | `pj_` | `<short>_` |
@@ -116,9 +117,11 @@ From the workspace root:
 2. If `tsconfig.json` exists at the root, add `<folder>` to its `exclude`. Do the same for any Prettier or test-runner ignore lists. ESLint needs no change, because `connorWorks({ app: 'main-site' })` ignores registry folders.
 3. If the main site depends on `@connor-works/config`, bump it to the new tag (or the local folder, per step 3.5). The main site's rewrites come from `zoneRewrites()`, so no rewrite code changes.
 4. If the main site has a `robots.txt`/`robots.ts`, ask which of the app's paths should be disallowed, and add them.
-5. **Update `ARCHITECTURE.md`:** add a row to the §2 registry table, and add the folder to the §2 local layout tree.
-6. **Update the root `AGENTS.md`:** add the app to the child app list under **Layout**.
-7. Show the root repo diff and ask before committing it.
+5. **Add a home page card** (`DESIGN.md`: cards have a title, short description, image and a highlight/hover color from the child app's tertiary color). Find where the home page defines its list of cards and add an entry: `title`, `description` and `href` (`<first prefix>`) from the inputs, an image (ask for one, or reuse the placeholder the existing cards use), and `highlightColor` set to `tertiaryColor`.
+   - **If the main site has no home page yet** (not scaffolded), skip this and add it to the handoff checklist (step 8) instead.
+6. **Update `ARCHITECTURE.md`:** add a row to the §2 registry table, and add the folder to the §2 local layout tree.
+7. **Update the root `AGENTS.md`:** add the app to the child app list under **Layout**.
+8. Show the root repo diff and ask before committing it.
 
 ## 6. Local database (if the app has one)
 
@@ -153,3 +156,4 @@ Print this checklist, filled in with the real values, and list anything from ste
 5. Deploy it, and check that `<healthPath>` passes.
 6. On `main-site`, set `<urlEnv>` = `http://${{<app>.RAILWAY_PRIVATE_DOMAIN}}:${{<app>.PORT}}`, and redeploy the main site with the new config package tag.
 7. Smoke-test through `https://connor.works<first prefix>`: pages load with styling (assets from `<assetPrefix>/_next/`), links work, and any Server Actions succeed.
+8. **If step 5.5 was skipped** because the main site had no home page yet: once it exists, add `<app>`'s card (title, description, `<first prefix>`, an image, and `highlightColor: <tertiaryColor>`) to its card list.

@@ -17,7 +17,8 @@ This document covers:
 9. [Rules every repo must follow](#9-rules-every-repo-must-follow)
 10. [Adding a new child app](#10-adding-a-new-child-app)
 11. [Local development](#11-local-development)
-12. [Troubleshooting](#12-troubleshooting)
+12. [Admin notifications (email)](#12-admin-notifications-email)
+13. [Troubleshooting](#13-troubleshooting)
 
 ---
 
@@ -75,6 +76,7 @@ Local layout:
 connor-works/                                  ← git repo: wbconnor/connor-works (the main site)
 ├── .gitignore                                 ← lists every child app folder
 ├── ARCHITECTURE.md                            ← this file (cross-repo architecture)
+├── DEPLOY.md                                  ← step-by-step deploy and maintenance instructions
 ├── AGENTS.md, CLAUDE.md                       ← instructions for AI agents
 ├── app/, package.json, next.config.ts, ...    ← main site Next.js app (once scaffolded)
 ├── railway.json
@@ -275,7 +277,7 @@ Child app folders sit inside the main site's folder locally, but they're git-ign
 
 ## 6. Domain & DNS
 
-The domain goes on the **`main-site` service only**, once, and stays there.
+The domain goes on the **`main-site` service only**, once, and stays there. It's registered at **Namecheap**, with its nameservers pointed at **Cloudflare**, which runs DNS (needed for apex CNAME flattening and the R2 custom domain). `DEPLOY.md` §1.6–1.7 has the step-by-step version.
 
 1. In Railway, go to **`main-site` → Settings → Networking → Custom Domain** and add `connor.works` (and optionally `www.connor.works`).
 2. Railway shows a **CNAME target** and a **TXT verification record**. Add them in Cloudflare DNS:
@@ -531,7 +533,70 @@ MERIDIAN_UNDERGROUND_URL=http://localhost:3001 pnpm dev   # from the workspace r
 
 ---
 
-## 12. Troubleshooting
+## 12. Admin notifications (email)
+
+Child apps sometimes need to alert the site admin (e.g. "new RSVP", "seed job failed"). Rather than each app integrating its own email provider, the **main site owns one notification endpoint**, `/api/notify`, and every app calls it over the private network — the same "go through the owning app's API" pattern as rule 6 in §9. Browser push isn't used for this: it would need a per-admin, per-browser permission grant and doesn't gain much over email at this site's scale.
+
+### 12.1 Email provider
+
+The main site integrates a single transactional email provider (default: [Resend](https://resend.com), which has a simple API and a free tier that comfortably covers admin-only volume). Variables on `main-site`:
+
+| Variable | Value |
+|---|---|
+| `RESEND_API_KEY` | API key from the provider |
+| `NOTIFY_EMAIL_FROM` | e.g. `notify@connor.works` (needs a verified sending domain with the provider) |
+| `NOTIFY_EMAIL_TO` | admin inbox(es) to receive notifications, comma-separated |
+| `NOTIFY_API_KEY` | shared secret child apps present when calling `/api/notify` (generate a long random value) |
+
+Keep the provider call behind a small `sendNotification()` function in the main site so swapping providers later only touches one file.
+
+### 12.2 `/api/notify` endpoint (main site)
+
+- `POST /api/notify` only. Body: `{ "app": "meridian-underground", "subject": "...", "text": "..." }` — plain text, no templating.
+- Auth: `Authorization: Bearer <NOTIFY_API_KEY>` header, checked against the main site's `NOTIFY_API_KEY`. One shared secret is enough here since the endpoint is only reachable over Railway's private network; move to a key per app later if that stops being true.
+- The handler prefixes the subject with `[app]`, sends via `sendNotification()` to `NOTIFY_EMAIL_TO`, and returns `202` once accepted. Reject with `400` on a missing/oversized field and `401` on a bad or missing key. Cap `text` length (e.g. 4 KB) so a buggy child app can't flood the admin inbox.
+- Log failures server-side; don't retry. This is a low-volume, non-critical path, not a delivery-guaranteed queue.
+
+### 12.3 Calling it from a child app
+
+Pin the main site's port, the same way child apps already pin theirs (§7.3), so other services can reach it predictably over the private network:
+
+| Variable (on `main-site`) | Value |
+|---|---|
+| `PORT` | `3000` |
+
+Then, on each child app's service:
+
+| Variable | Value |
+|---|---|
+| `MAIN_SITE_URL` | `http://${{main-site.RAILWAY_PRIVATE_DOMAIN}}:${{main-site.PORT}}` |
+| `NOTIFY_API_KEY` | same value as `main-site`'s `NOTIFY_API_KEY` |
+
+```ts
+// shared helper in the child app, e.g. lib/notify.ts
+export async function notifyAdmin(subject: string, text: string) {
+  try {
+    await fetch(`${process.env.MAIN_SITE_URL}/api/notify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.NOTIFY_API_KEY}`,
+      },
+      body: JSON.stringify({ app: 'meridian-underground', subject, text }),
+      signal: AbortSignal.timeout(3000),
+    });
+  } catch (err) {
+    console.error('notifyAdmin failed', err); // never throw: a notification failure must not break the caller's request
+  }
+}
+```
+
+- **Never await this on the critical path in a way that fails the user's request.** An RSVP or vote must still succeed even if the notification call times out or the main site is down.
+- Like database access (§4.3), this is a private-network-only call. Don't expose `/api/notify` outside it, and don't call it from the browser.
+
+---
+
+## 13. Troubleshooting
 
 | Symptom | Likely cause / fix |
 |---|---|
@@ -545,3 +610,4 @@ MERIDIAN_UNDERGROUND_URL=http://localhost:3001 pnpm dev   # from the workspace r
 | Redirect loop after adding the domain | Cloudflare SSL mode is "Flexible". Switch it to "Full". |
 | Pre-deploy (`prisma migrate deploy`) fails with "permission denied" or "database does not exist" | The role or database wasn't created, or the role doesn't own the database (§4.1). Check the database name and password in `DATABASE_URL`. |
 | "Too many connections" | The apps share one instance's connection limit. Add `?connection_limit=5` to each app's `DATABASE_URL`. |
+| Admin isn't receiving emails | Check the child app's `NOTIFY_API_KEY` matches `main-site`'s; check `main-site` logs for a `401`/`400` from `/api/notify`; check `RESEND_API_KEY` and `NOTIFY_EMAIL_FROM`'s sending domain are valid with the provider; check spam. |
