@@ -1,2 +1,27 @@
+# Nested repos (separate git repos, cloned into this workspace)
 meridian-underground/
 connor-works-config/
+
+# dependencies
+/node_modules
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+.pnpm-debug.log*
+
+# env files
+.env*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
