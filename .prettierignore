@@ -5,3 +5,4 @@ meridian-underground/
 .next/
 pnpm-lock.yaml
 *.md
+.claude/

@@ -1,26 +1,59 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
+/* Color tokens (DESIGN.md §4.1). Light theme only. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #c4c4c4;
+  --surface: #e8e8e8;
+  --ink: #1a1a1a;
+  --ink-muted: #4a4a4a;
+  --border: #a8a8a8;
+  --accent-default: #333333;
+  --focus: #1a1a1a;
+  --footer: #333333;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-border: var(--border);
+  --color-accent-default: var(--accent-default);
+  --color-focus: var(--focus);
+  --color-footer: var(--footer);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/*
+ * ASCII art sizes (DESIGN.md §6.1). Geist Mono glyphs are 0.6em wide, so the 73-column wide
+ * art is 43.8em and the 30-column stacked art is 18em. Each clamp keeps the art inside the
+ * column (viewport minus side padding) without wrapping.
+ */
+.ascii-wide {
+  font-size: clamp(0.5rem, 2.2vw - 0.1rem, 1.25rem);
+}
+
+.ascii-stacked {
+  font-size: clamp(0.5rem, 5vw - 0.1rem, 1rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition: none !important;
+  }
 }
