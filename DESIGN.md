@@ -71,7 +71,7 @@ Implement these as CSS variables mapped in the Tailwind theme (`bg-bg`, `text-in
 | `border` | `#A8A8A8` | Card outline at rest |
 | `accent-default` | `#333333` | Card accent when a project has no `highlightColor` |
 | `focus` | `#1A1A1A` | Focus ring for non-card elements |
-| `footer` | `#333333` | Footer background where the gradient ends; footer text uses `bg` on it (~7:1) |
+| `footer` | `#E0E0E0` | Footer background where the gradient ends; footer text uses `bg` on it (~1.4:1, deliberately faint) |
 
 ### 4.2 Typography
 
@@ -240,9 +240,9 @@ One or two sentences in `ink`, max width about 60 characters per line:
 
 A full-width band at the bottom of the page, `3rem` tall:
 
-- **Background:** a vertical gradient from `bg` at the top edge to `footer` (`#333333`) at `2rem`, then solid `footer` for the last `1rem`. For example: `linear-gradient(to bottom, var(--bg), var(--footer) 2rem)`. The top edge matches the page, so the band has no visible seam.
+- **Background:** a vertical gradient from `bg` at the top edge to `footer` (`#E0E0E0`) at `2rem`, then solid `footer` for the last `1rem`. For example: `linear-gradient(to bottom, var(--bg), var(--footer) 2rem)`. The top edge matches the page, so the band has no visible seam.
 - **Text:** `© {current year} connor.works`, `0.875rem`, centered horizontally and placed in the bottom `1rem` (the solid part), so its contrast doesn't depend on the gradient.
-- **Text color:** `bg` (`#C4C4C4`) on `footer`, ~7:1. Don't use `ink-muted` here: it's ~1.4:1 on `footer`, which is unreadable.
+- **Text color:** `bg` (`#C4C4C4`) on `footer`, ~1.4:1. The low contrast is intentional: the footer only holds the copyright line, and it should be nearly invisible. Use `ink-muted` (~7:1) if it ever needs to be readable.
 - No links in v1. The band spans the full viewport width, outside the 960px content column.
 
 ---
