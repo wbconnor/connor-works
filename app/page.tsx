@@ -12,10 +12,10 @@ export default function Home() {
     <main className="mx-auto w-full max-w-[960px] px-4 pt-16 pb-16 md:px-8">
       <h1>
         <span className="sr-only">Connor dot works</span>
-        <pre aria-hidden="true" className="ascii-wide hidden overflow-x-auto leading-[1.1] md:block">
+        <pre aria-hidden="true" className="ascii-wide hidden overflow-x-auto overflow-y-hidden leading-[1.1] md:block">
           {wide}
         </pre>
-        <pre aria-hidden="true" className="ascii-stacked overflow-x-auto leading-[1.1] md:hidden">
+        <pre aria-hidden="true" className="ascii-stacked overflow-x-auto overflow-y-hidden leading-[1.1] md:hidden">
           {stacked}
         </pre>
       </h1>

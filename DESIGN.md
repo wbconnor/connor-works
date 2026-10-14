@@ -76,6 +76,7 @@ Implement these as CSS variables mapped in the Tailwind theme (`bg-bg`, `text-in
 ### 4.2 Typography
 
 - **ASCII title:** Geist Mono, `white-space: pre`, `line-height: 1.1`, color `ink`. Size rules are in §6.1.
+  - **Depth:** an embossed edge (a `surface` highlight up-left, a `#8A8A8A` edge down-right) over a soft drop shadow. All offsets are in `em` so they scale with the title: `text-shadow: -0.04em -0.04em 0 var(--surface), 0.04em 0.04em 0 #8a8a8a, 0.1em 0.12em 0.14em rgb(0 0 0 / 0.3)`.
 - **Body:** Geist Sans. Intro text `1.125rem`, card title `1.25rem` semibold, card description `1rem`, footer `0.875rem`.
 
 ### 4.3 Layout

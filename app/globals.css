@@ -9,7 +9,7 @@
   --border: #a8a8a8;
   --accent-default: #333333;
   --focus: #1a1a1a;
-  --footer: #333333;
+  --footer: #e0e0e0;
 }
 
 @theme inline {
@@ -48,6 +48,15 @@
 
 .ascii-stacked {
   font-size: clamp(0.5rem, 5vw - 0.1rem, 1rem);
+}
+
+/* Embossed strokes (light top-left, dark bottom-right) over a soft drop shadow (DESIGN.md §4.2) */
+.ascii-wide,
+.ascii-stacked {
+  text-shadow:
+    -0.04em -0.04em 0 var(--surface),
+    0.04em 0.04em 0 #8a8a8a,
+    0.1em 0.12em 0.14em rgb(0 0 0 / 0.3);
 }
 
 @media (prefers-reduced-motion: reduce) {
