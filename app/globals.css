@@ -1,0 +1,68 @@
+@import 'tailwindcss';
+
+/* Color tokens (DESIGN.md §4.1). Light theme only. */
+:root {
+  --bg: #c4c4c4;
+  --surface: #e8e8e8;
+  --ink: #1a1a1a;
+  --ink-muted: #4a4a4a;
+  --border: #a8a8a8;
+  --accent-default: #333333;
+  --focus: #1a1a1a;
+  --footer: #e0e0e0;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-border: var(--border);
+  --color-accent-default: var(--accent-default);
+  --color-focus: var(--focus);
+  --color-footer: var(--footer);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * ASCII art sizes (DESIGN.md §6.1). Geist Mono glyphs are 0.6em wide, so the 73-column wide
+ * art is 43.8em and the 30-column stacked art is 18em. Each clamp keeps the art inside the
+ * column (viewport minus side padding) without wrapping.
+ */
+.ascii-wide {
+  font-size: clamp(0.5rem, 2.2vw - 0.1rem, 1.25rem);
+}
+
+.ascii-stacked {
+  font-size: clamp(0.5rem, 5vw - 0.1rem, 1rem);
+}
+
+/* Embossed strokes (light top-left, dark bottom-right) over a soft drop shadow (DESIGN.md §4.2) */
+.ascii-wide,
+.ascii-stacked {
+  text-shadow:
+    -0.04em -0.04em 0 var(--surface),
+    0.04em 0.04em 0 #8a8a8a,
+    0.1em 0.12em 0.14em rgb(0 0 0 / 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition: none !important;
+  }
+}

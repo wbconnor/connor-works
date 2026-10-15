@@ -1,0 +1,8 @@
+# Nested repos (ARCHITECTURE.md §5.5)
+connor-works-config/
+meridian-underground/
+
+.next/
+pnpm-lock.yaml
+*.md
+.claude/
