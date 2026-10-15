@@ -49,7 +49,7 @@ The main site repo must be deployable:
 ### 1.2 Create the Railway project and the main site service
 
 1. In Railway: **New Project → Deploy from GitHub repo → `wbconnor/connor-works`**. Give Railway access to the repo if asked.
-2. Rename the project to `connor-works` and the service to **`main-site`**. The name matters, because other services reach it at `main-site.railway.internal`.
+2. Rename the project to `connor-works` and the service to **`main-site`**: open the service and click its title at the top of the panel (Settings has no name field). Then check **Settings → Networking → Private Networking** shows `main-site.railway.internal`, because other services reach it there. Renaming alone may not set it; if it's empty or different, set it to `main-site`.
 3. **Service → Settings:**
    - **Source:** branch `main`. Turn on **Wait for CI** so a push only deploys after GitHub Actions passes.
    - **Config as code:** confirm Railway picked up `railway.json` (build/start commands and health check show as "set by railway.json").
@@ -60,7 +60,11 @@ The main site repo must be deployable:
 You can do this now or wait until the first app needs a database. Doing it now keeps the project complete.
 
 1. In the project canvas: **+ Create → Database → PostgreSQL**. Keep the service name **`Postgres`**, which the `${{Postgres.…}}` variable references depend on.
-2. **Postgres → Settings:** don't generate a public HTTP domain. The **TCP proxy** that the template enables (see `DATABASE_PUBLIC_URL` in its variables) is what lets you run `pg_dump`/`psql` from your Mac. Apps never use it.
+2. **Postgres → Settings → Networking:** don't generate a public HTTP domain. Make sure there's a **TCP proxy** to port `5432`. It's what lets you run `railway connect`, `pg_dump` and `psql` from your Mac; apps never use it. The template may not create one: if not, click **+ TCP Proxy**, confirm `5432`, then add this variable on **Postgres** (not the app service), and deploy the staged changes:
+   ```
+   DATABASE_PUBLIC_URL=postgresql://${{PGUSER}}:${{POSTGRES_PASSWORD}}@${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}/${{PGDATABASE}}
+   ```
+   Without it, `railway connect Postgres` fails with "Connection URL should point to the Railway TCP proxy".
 3. **Postgres → Backups** (if your plan has it): turn on scheduled backups, daily at least. These back up the **whole instance**. Part 3.7 covers per-app dumps.
 4. Note the version: `railway connect Postgres`, then `SELECT version();`.
    - Your local `pg_dump --version` must be the same major version or newer, or backups (Part 3.7) fail. If it's older, run `brew upgrade libpq`.
