@@ -39,7 +39,6 @@ railway login
 The main site repo must be deployable:
 
 - [ ] Scaffolded, with `pnpm build` passing locally.
-- [ ] `railway.json` at the repo root (`ARCHITECTURE.md` §5.1).
 - [ ] `"start": "next start -H ::"` in `package.json`.
 - [ ] A health route at `/api/health` that returns `200`.
 - [ ] `next.config.ts` uses `zoneRewrites()` (`ARCHITECTURE.md` §5.2), and `@connor-works/config` is installed **from a pushed git tag**, not the local folder. Railway can't see `../connor-works-config`.
@@ -52,7 +51,8 @@ The main site repo must be deployable:
 2. Rename the project to `connor-works` and the service to **`main-site`**: open the service and click its title at the top of the panel (Settings has no name field). Then check **Settings → Networking → Private Networking** shows `main-site.railway.internal`, because other services reach it there. Renaming alone may not set it; if it's empty or different, set it to `main-site`.
 3. **Service → Settings:**
    - **Source:** branch `main`. Turn on **Wait for CI** so a push only deploys after GitHub Actions passes.
-   - **Config as code:** confirm Railway picked up `railway.json` (build/start commands and health check show as "set by railway.json").
+   - **Build / Deploy:** enter the settings in `ARCHITECTURE.md` §5.1: build `pnpm build`, start `pnpm start`, healthcheck `/api/health` with timeout `120`, restart policy **On failure**. There's no config file; Railway no longer reads `railway.json` for new services.
+   - Click **Deploy** to apply the staged changes, then check the settings stuck. Changes left staged are easy to lose.
 4. Let the first build run. It may fail health checks until the variables below are set, which is fine.
 
 ### 1.3 Add the shared Postgres instance
@@ -70,7 +70,7 @@ You can do this now or wait until the first app needs a database. Doing it now k
    - Your local `pg_dump --version` must be the same major version or newer, or backups (Part 3.7) fail. If it's older, run `brew upgrade libpq`.
    - Keep the local Docker image (`docker-compose.yml`) on the same major version as the server.
 
-The default `railway` database stays as it is. Each app gets its own database and role, created when that app is first deployed (Part 2.2). The main site doesn't get one unless it needs one; if it does, follow Part 2.2 with `main_site` as the name and add the `preDeployCommand` (Part 3.3).
+The default `railway` database stays as it is. Each app gets its own database and role, created when that app is first deployed (Part 2.2). The main site doesn't get one unless it needs one; if it does, follow Part 2.2 with `main_site` as the name and set the pre-deploy command (Part 3.3).
 
 ### 1.4 Set the main site's variables
 
@@ -212,7 +212,7 @@ Don't give production roles `CREATEDB`. That's only needed locally, for Prisma's
 
 1. In the `connor-works` project: **+ Create → GitHub Repo → `wbconnor/meridian-underground`**.
 2. Rename the service to exactly **`meridian-underground`**, the registry's `service`. The private hostname comes from it.
-3. **Settings:** branch `main`, **Wait for CI** on, and confirm `railway.json` was picked up (health check path = the registry's `healthPath`).
+3. **Settings:** branch `main`, **Wait for CI** on, and enter the build, start, healthcheck and restart settings from `ARCHITECTURE.md` §7.1 (healthcheck path = the registry's `healthPath`).
 4. **Variables:**
 
    | Variable | Value |
@@ -226,7 +226,7 @@ Don't give production roles `CREATEDB`. That's only needed locally, for Prisma's
    | `NOTIFY_API_KEY` | the same value as on `main-site` (only if the app sends notifications) |
    | App-specific | e.g. `SESSION_SECRET`, `TMDB_API_READ_TOKEN`, `R2_*`, `THEATER_TIMEZONE`. See the app's `DESIGN.md` / `.env.example`. |
 
-5. **Migrations:** if the app has Prisma migrations, its `railway.json` should contain `"preDeployCommand": ["pnpm prisma migrate deploy"]`. On the first deploy this creates all tables. If the app has no migrations yet, leave the command out, or the deploy fails.
+5. **Migrations:** if the app has Prisma migrations, set **Settings → Deploy → Pre-deploy command** to `pnpm prisma migrate deploy`. On the first deploy this creates all tables. If the app has no migrations yet, leave the command out, or the deploy fails.
 6. Click **Deploy**.
 
 ### 2.4 Verify the app on its own
@@ -286,7 +286,7 @@ Each service redeploys automatically when its repo's `main` branch changes (afte
 
 ### 3.2 Deploys with database migrations
 
-Each app runs its own migrations in `preDeployCommand` (`pnpm prisma migrate deploy`) as its own role, against its own database only.
+Each app runs its own migrations in its pre-deploy command (`pnpm prisma migrate deploy`) as its own role, against its own database only.
 
 1. **Create the migration locally** against Docker Postgres: `pnpm prisma migrate dev --name <change>`. Commit the generated `prisma/migrations/…` folder.
 2. **Keep it backward compatible.** Migrations run while the *old* code is still serving, and the old code keeps serving if the deploy fails. So:
@@ -301,7 +301,7 @@ Each app runs its own migrations in `preDeployCommand` (`pnpm prisma migrate dep
 1. Change the registry first: set `database` in `zones.mjs`, release a tag, and bump the app to it (Part 3.4).
 2. Production: create the role and database (Part 2.2) and set `<APP>_DB_PASSWORD` and `DATABASE_URL` on the service (Part 2.3).
 3. Local: add the `CREATE ROLE … CREATEDB` / `CREATE DATABASE` lines to `docker/postgres-init/01-databases.sql`, and run them by hand in the running container (`ARCHITECTURE.md` §11).
-4. Add `"preDeployCommand": ["pnpm prisma migrate deploy"]` to the app's `railway.json` in the same PR as its first migration.
+4. When the PR with the first migration merges, set the service's **Pre-deploy command** to `pnpm prisma migrate deploy` (Settings → Deploy). Don't set it before migrations exist, or the deploy fails.
 
 ### 3.4 Updating the config package (`@connor-works/config`)
 

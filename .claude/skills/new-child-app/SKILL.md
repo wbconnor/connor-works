@@ -85,7 +85,6 @@ From the workspace root:
    |---|---|
    | `next.config.ts` | `next.config.ts` (replace the generated one) |
    | `eslint.config.mjs` | `eslint.config.mjs` (replace the generated one) |
-   | `railway.json` | `railway.json` |
    | `health-route.ts` | `app<healthPath>/route.ts` |
    | `test/route-prefixes.test.ts` | `test/route-prefixes.test.ts` |
    | `vitest.config.ts` | `vitest.config.ts` |
@@ -142,7 +141,7 @@ From the workspace root:
    ```bash
    docker compose exec -T postgres psql -U postgres -c "CREATE ROLE <database> LOGIN PASSWORD 'dev' CREATEDB;" -c "CREATE DATABASE <database> OWNER <database>;"
    ```
-4. Once the app has migrations, add `"preDeployCommand": ["pnpm prisma migrate deploy"]` (or the app's migrate command) to its `railway.json`. Don't add it before migrations exist, or the deploy fails.
+4. Railway settings aren't in the repo (`ARCHITECTURE.md` §7.1). In the hand-off, tell the user to set the service's **Pre-deploy command** to `pnpm prisma migrate deploy` (or the app's migrate command) once the app has migrations. Not before, or the deploy fails.
 
 ## 7. Final check
 
@@ -157,7 +156,7 @@ Print this checklist, filled in with the real values, and list anything from ste
 2. Push the config package, if not done in step 3: `git -C connor-works-config push && git -C connor-works-config push --tags`. Then switch every local install to the tag: `pnpm add "github:wbconnor/connor-works-config#v<version>"` in `<folder>/` and in the main site.
 3. **Production database** (if any): run the §4.1 SQL on the Railway Postgres with a generated password:
    `CREATE ROLE <database> LOGIN PASSWORD '...'; CREATE DATABASE <database> OWNER <database>; REVOKE CONNECT ON DATABASE <database> FROM PUBLIC;`
-4. **Railway:** in the `connor-works` project, add a service from `<repo>` named `<app>`, and set its variables (full table: `DEPLOY.md` §2.3):
+4. **Railway:** in the `connor-works` project, add a service from `<repo>` named `<app>`. Enter its settings (build, start, healthcheck `<healthPath>`, restart policy; `ARCHITECTURE.md` §7.1) and set its variables (full table: `DEPLOY.md` §2.3):
    - `PORT=3000`, `SITE_URL=https://connor.works`, `ALLOWED_ORIGINS=connor.works`
    - with a database: `<APP>_DB_PASSWORD` and `DATABASE_URL`, per `ARCHITECTURE.md` §4.2
    - if it sends admin notifications: `MAIN_SITE_URL` and `NOTIFY_API_KEY` (`ARCHITECTURE.md` §12.3)
