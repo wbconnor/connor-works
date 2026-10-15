@@ -458,7 +458,7 @@ Put these two files in the workspace root, next to `ARCHITECTURE.md`. The databa
 # connor-works/docker-compose.yml
 services:
   postgres:
-    image: postgres:17        # match the major version of Railway's Postgres service
+    image: postgres:18        # match the major version of Railway's Postgres service
     restart: unless-stopped
     ports:
       - "5432:5432"           # change to "5433:5432" if something else already uses 5432
@@ -466,7 +466,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql    # postgres:18+ path; 17 and older used /var/lib/postgresql/data
       - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -512,7 +512,7 @@ Then, in each app: `pnpm prisma migrate dev` to apply migrations, and `pnpm pris
 Notes:
 
 - **Adding an app:** add its `CREATE ROLE`/`CREATE DATABASE` lines to `01-databases.sql`. The init script only runs on an empty volume, so for an existing setup either run the same SQL by hand in `psql` or reset with `docker compose down -v`.
-- **Upgrading Postgres major versions** (e.g. 17 → 18) needs a fresh volume: `pg_dump` anything you want to keep, then `docker compose down -v`. Note that the `postgres:18` image stores data at a different path (`/var/lib/postgresql`), so update the volume mount at the same time.
+- **Upgrading Postgres major versions** (e.g. 18 → 19) needs a fresh volume: `pg_dump` anything you want to keep, then `docker compose down -v`. Check the new image's release notes for data path changes (18 moved it to `/var/lib/postgresql`) and update the volume mount to match.
 - **Stop Postgres.app or Homebrew Postgres** if either is running, or change the host port. Otherwise the apps may connect to the wrong server.
 
 **Trying unreleased config package changes:** point an app at the local copy temporarily, then switch back to a tag before committing:
