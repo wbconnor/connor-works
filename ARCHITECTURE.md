@@ -80,7 +80,6 @@ connor-works/                                  ← git repo: wbconnor/connor-wor
 ├── DESIGN.md                                  ← main site design doc (home page, cards, /api/notify)
 ├── AGENTS.md, CLAUDE.md                       ← instructions for AI agents
 ├── app/, package.json, next.config.ts, ...    ← main site Next.js app
-├── railway.json
 ├── docker-compose.yml                         ← local Postgres for all apps (§11)
 ├── docker/postgres-init/01-databases.sql      ← local roles + databases (§11)
 ├── .claude/skills/new-child-app/              ← Claude Code skill: adds a child app end to end (§10)
@@ -188,22 +187,23 @@ On the `meridian-underground` service, add these variables:
 
 ## 5. Deploying the main site
 
-### 5.1 Config as code: `railway.json` in the repo root
+### 5.1 Service settings in the Railway dashboard
 
-```json
-{
-  "$schema": "https://railway.com/railway.schema.json",
-  "build": { "builder": "RAILPACK", "buildCommand": "pnpm build" },
-  "deploy": {
-    "startCommand": "pnpm start",
-    "healthcheckPath": "/api/health",
-    "healthcheckTimeout": 120,
-    "restartPolicyType": "ON_FAILURE"
-  }
-}
-```
+Railway's Config as Code (`railway.json`/`railway.toml`) is deprecated: services created after 2026-08-28 can't use it, and it stops being read on 2026-12-01. Its replacement, Infrastructure as Code (`.railway/railway.ts`), isn't used here yet. Service settings live in the Railway dashboard instead (DEPLOY.md Part 1.2).
 
-If the main site uses a database, add `"preDeployCommand": ["pnpm prisma migrate deploy"]` to the `deploy` section.
+**`main-site` → Settings:**
+
+| Setting | Value |
+|---|---|
+| Builder | Railpack |
+| Build command | `pnpm build` |
+| Start command | `pnpm start` |
+| Healthcheck path | `/api/health` |
+| Healthcheck timeout | `120` |
+| Restart policy | On failure |
+| Private networking | `main-site.railway.internal` |
+
+If the main site uses a database, set the **Pre-deploy command** to `pnpm prisma migrate deploy`.
 
 `package.json`:
 
@@ -297,21 +297,19 @@ The domain goes on the **`main-site` service only**, once, and stays there. It's
 
 Using Meridian Underground as the example.
 
-### 7.1 `railway.json` in the child app repo
+### 7.1 Service settings in the Railway dashboard
 
-```json
-{
-  "$schema": "https://railway.com/railway.schema.json",
-  "build": { "builder": "RAILPACK", "buildCommand": "pnpm build" },
-  "deploy": {
-    "startCommand": "pnpm start",
-    "preDeployCommand": ["pnpm prisma migrate deploy"],
-    "healthcheckPath": "/meridian-underground/api/health",
-    "healthcheckTimeout": 120,
-    "restartPolicyType": "ON_FAILURE"
-  }
-}
-```
+As for the main site (§5.1), these are set in the dashboard, not in a config file. **`meridian-underground` → Settings:**
+
+| Setting | Value |
+|---|---|
+| Builder | Railpack |
+| Build command | `pnpm build` |
+| Start command | `pnpm start` |
+| Pre-deploy command | `pnpm prisma migrate deploy` (only once the app has migrations) |
+| Healthcheck path | `/meridian-underground/api/health` (the registry's `healthPath`) |
+| Healthcheck timeout | `120` |
+| Restart policy | On failure |
 
 `package.json`:
 
@@ -405,7 +403,7 @@ Use **`http://`**: private-network traffic stays inside Railway and has no TLS. 
 6. **Set `serverActions.allowedOrigins`** to include `connor.works` in child apps that use Server Actions.
 7. **Don't rely on `/_next/image`** in child apps. Use `images.unoptimized: true` or a custom loader.
 8. **One database per app on the shared instance**, each with its own role (§4). Never connect to another app's database.
-9. **Health check under your own prefix** (e.g. `/meridian-underground/api/health`), set in `railway.json`.
+9. **Health check under your own prefix** (e.g. `/meridian-underground/api/health`), set in the service's Railway settings (§7.1).
 10. **Bind to `::`** (`next start -H ::`) so the private network can reach the app.
 
 Rules 1–7 are set up or enforced by `@connor-works/config` (§2.1):
@@ -426,14 +424,14 @@ In summary, it:
 2. **Updates the config package:** adds the app to `zones.mjs` and bumps the version.
 3. **Scaffolds the child app** in `connor-works/<folder>/` from templates:
    - installs `@connor-works/config`, and sets up `next.config.ts` and `eslint.config.mjs`
-   - adds the route-prefix test, `railway.json`, a health route and CI
+   - adds the route-prefix test, a health route and CI
    - adds `AGENTS.md`/`CLAUDE.md` and `.claude/settings.json`
 4. **Updates the main site:** `.gitignore`, `tsconfig.json` `exclude`, the config package tag, `robots.txt`, and the home page card in `app/projects.ts` (`DESIGN.md` §5).
 5. **Updates the docs:** this file's registry table (§2) and the root `AGENTS.md`.
 6. **Sets up the local database:** adds the app's role and database to `docker/postgres-init/01-databases.sql`, and creates them in the running container.
 7. **Hands off the manual steps:**
    - create the GitHub repo and push, then push the package tag
-   - create the Railway service and set its variables
+   - create the Railway service and enter its settings (§7.1) and variables
    - run the production SQL (§4.1)
    - set `<APP>_URL` on `main-site`
    - smoke-test through `connor.works`
@@ -458,7 +456,7 @@ Put these two files in the workspace root, next to `ARCHITECTURE.md`. The databa
 # connor-works/docker-compose.yml
 services:
   postgres:
-    image: postgres:17        # match the major version of Railway's Postgres service
+    image: postgres:18        # match the major version of Railway's Postgres service
     restart: unless-stopped
     ports:
       - "5432:5432"           # change to "5433:5432" if something else already uses 5432
@@ -466,7 +464,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql    # postgres:18+ path; 17 and older used /var/lib/postgresql/data
       - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -512,7 +510,7 @@ Then, in each app: `pnpm prisma migrate dev` to apply migrations, and `pnpm pris
 Notes:
 
 - **Adding an app:** add its `CREATE ROLE`/`CREATE DATABASE` lines to `01-databases.sql`. The init script only runs on an empty volume, so for an existing setup either run the same SQL by hand in `psql` or reset with `docker compose down -v`.
-- **Upgrading Postgres major versions** (e.g. 17 → 18) needs a fresh volume: `pg_dump` anything you want to keep, then `docker compose down -v`. Note that the `postgres:18` image stores data at a different path (`/var/lib/postgresql`), so update the volume mount at the same time.
+- **Upgrading Postgres major versions** (e.g. 18 → 19) needs a fresh volume: `pg_dump` anything you want to keep, then `docker compose down -v`. Check the new image's release notes for data path changes (18 moved it to `/var/lib/postgresql`) and update the volume mount to match.
 - **Stop Postgres.app or Homebrew Postgres** if either is running, or change the host port. Otherwise the apps may connect to the wrong server.
 
 **Trying unreleased config package changes:** point an app at the local copy temporarily, then switch back to a tag before committing:
