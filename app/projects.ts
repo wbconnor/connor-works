@@ -13,4 +13,15 @@ export type Project = {
   listed: boolean; // false = registered app with no public card
 };
 
-export const projects: Project[] = [];
+export const projects: Project[] = [
+  {
+    app: 'meridian-underground',
+    title: 'Meridian Underground',
+    description: 'A home theater showcase, a public movie collection, and movie-night invitations with RSVPs.',
+    href: '/meridian-underground',
+    image: '/projects/placeholder.webp',
+    imageAlt: 'Placeholder image',
+    highlightColor: '#244653',
+    listed: true,
+  },
+];
