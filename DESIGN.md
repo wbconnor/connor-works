@@ -303,7 +303,7 @@ Include `/` plus the `href` of every **visible** project (§5.2). Child apps tha
 
 - **Tooling exclusions:** list `connor-works-config/` and every child app folder in `tsconfig.json` `exclude`, `.prettierignore` and the Vitest `exclude` (`ARCHITECTURE.md` §5.5). Use `connorWorks({ app: 'main-site' })` for ESLint.
 - **No middleware in v1.** If one is added later, scope its `matcher` away from child app prefixes.
-- **`www` redirect:** handled per `DEPLOY.md` (Cloudflare rule if proxied, otherwise `redirects()` in `next.config.ts`).
+- **`www` redirect:** a Cloudflare Redirect Rule (`DEPLOY.md` §1.7). `www.connor.works` never reaches the main site, so it has no host redirect code.
 - **Start command:** `next start -H ::`, with `PORT=3000` pinned on Railway (`ARCHITECTURE.md` §12.3).
 - **Suggested file layout:**
   ```

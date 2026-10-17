@@ -121,7 +121,7 @@ Use **one Railway project** named `connor-works` and put every service in it. Se
 
 | Service | Source | Public domain? | Notes |
 |---|---|---|---|
-| `main-site` | GitHub `wbconnor/connor-works` | **Yes**: `connor.works` (+ `www`) | The router. Deploy first. |
+| `main-site` | GitHub `wbconnor/connor-works` | **Yes**: `connor.works` only (Cloudflare redirects `www`, §6) | The router. Deploy first. |
 | `Postgres` | Railway Postgres template | No | One instance, with a separate database per app (§4) |
 | `meridian-underground` | GitHub `wbconnor/meridian-underground` | Optional `*.up.railway.app` domain for testing only | Child app |
 
@@ -280,16 +280,15 @@ Child app folders sit inside the main site's folder locally, but they're git-ign
 
 The domain goes on the **`main-site` service only**, once, and stays there. It's registered at **Namecheap**, with its nameservers pointed at **Cloudflare**, which runs DNS (needed for apex CNAME flattening and the R2 custom domain). `DEPLOY.md` §1.6–1.7 has the step-by-step version.
 
-1. In Railway, go to **`main-site` → Settings → Networking → Custom Domain** and add `connor.works` (and optionally `www.connor.works`).
+1. In Railway, go to **`main-site` → Settings → Networking → Custom Domain** and add `connor.works` only.
 2. Railway shows a **CNAME target** and a **TXT verification record**. Add them in Cloudflare DNS:
    | Type | Name | Target |
    |---|---|---|
    | CNAME | `@` | `<target from Railway>` (Cloudflare flattens a CNAME at the apex automatically) |
-   | CNAME | `www` | `<target from Railway>` |
    | TXT | *(as shown by Railway)* | *(as shown by Railway)* |
-3. If the Cloudflare proxy (orange cloud) is on, set **SSL/TLS mode to "Full"**. "Flexible" causes redirect loops. You can also turn the proxy off (grey cloud) and let Railway handle TLS.
-4. Pick one canonical host. For example, add a Cloudflare redirect rule from `www.connor.works/*` to `https://connor.works/$1`.
-5. `img.connor.works` is set up separately as an **R2 custom domain** in Cloudflare. It doesn't involve Railway.
+3. The canonical host is `https://connor.works`. **`www` never reaches Railway:** a proxied placeholder record (`AAAA www → 100::`) plus a Cloudflare Redirect Rule sends it to the apex with a 301. This keeps `main-site` within Railway's custom domain limits (Trial: 1 in total, Hobby: 2 per service) and needs no redirect code in the main site.
+4. The apex can be proxied (orange cloud) or DNS only. If anything is proxied, set **SSL/TLS mode to "Full (strict)"**. "Flexible" causes redirect loops.
+5. `img.connor.works` is set up separately as an **R2 custom domain** in Cloudflare. It doesn't involve Railway. A custom domain maps to one bucket and R2 tokens are scoped per bucket, so once a second app needs images, give it its own bucket and subdomain (`DEPLOY.md` §1.8).
 
 ---
 
@@ -610,7 +609,9 @@ export async function notifyAdmin(subject: string, text: string) {
 | Main site returns 502/500 for child app paths | The private URL is wrong: use `http://` (not https), make sure the port matches the child app's `PORT`, and make sure the app binds to `::`. Also check that the child app's deploy is healthy. |
 | Invitation links or OG images point at `*.railway.internal` or `*.up.railway.app` | The code is using the request host. Build URLs from `SITE_URL`. |
 | Logged out of one app when logging into another | Cookie name collision. Use per-app cookie prefixes. |
-| Redirect loop after adding the domain | Cloudflare SSL mode is "Flexible". Switch it to "Full". |
+| Redirect loop after adding the domain | Cloudflare SSL mode is "Flexible". Switch it to "Full (strict)". |
+| `SSL_ERROR_NO_CYPHER_OVERLAP` (Firefox) or `sslv3 alert handshake failure` (curl) on a proxied host | Cloudflare hasn't issued its edge certificate yet. It follows the zone going Active, usually within 15 minutes. Check **SSL/TLS → Edge Certificates**. |
+| Cloudflare warns a Redirect Rule "may not apply" although the `www` record is orange | The zone is still pending, so nothing is proxied yet. Deploy the rule anyway; it works once the zone is Active. |
 | Pre-deploy (`prisma migrate deploy`) fails with "permission denied" or "database does not exist" | The role or database wasn't created, or the role doesn't own the database (§4.1). Check the database name and password in `DATABASE_URL`. |
 | "Too many connections" | The apps share one instance's connection limit. Add `?connection_limit=5` to each app's `DATABASE_URL`. |
 | Admin isn't receiving emails | Check the child app's `NOTIFY_API_KEY` matches `main-site`'s; check `main-site` logs for a `401`/`400`/`429` from `/api/notify`, or a `503` (email variables missing on `main-site`); check `RESEND_API_KEY` and `NOTIFY_EMAIL_FROM`'s sending domain are valid with the provider; check spam. |
