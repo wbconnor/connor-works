@@ -12,7 +12,7 @@ Step-by-step instructions for deploying connor.works to Railway. `ARCHITECTURE.m
 | Thing | Provider |
 |---|---|
 | Domain registration (`connor.works`) | Namecheap |
-| DNS, `img.connor.works` (R2 images) | Cloudflare (Namecheap's nameservers point here) |
+| DNS, the `www` redirect, `img.connor.works` (R2 images) | Cloudflare (Namecheap's nameservers point here) |
 | Apps and Postgres | Railway, one project named `connor-works` |
 | Code | GitHub, one repo per app plus `wbconnor/connor-works-config` |
 
@@ -102,45 +102,64 @@ Namecheap stays the registrar (renewals and billing). Cloudflare runs DNS, becau
 - it can do CNAME flattening at the apex, which Railway needs for `connor.works`, and
 - R2's custom domain (`img.connor.works`) requires the zone to be on Cloudflare.
 
-1. **Cloudflare → Add a domain → `connor.works`**, Free plan. Cloudflare imports any existing records. Delete the Namecheap parking records (usually a `CNAME www → parkingpage.namecheap.com` and a URL redirect record).
-2. Cloudflare shows two nameservers (e.g. `ada.ns.cloudflare.com`, `bob.ns.cloudflare.com`).
-3. **Namecheap → Domain List → connor.works → Manage:**
-   - If **DNSSEC** is on (Advanced DNS tab), turn it **off** first. A stale DS record breaks resolution after the nameserver switch.
-   - **Nameservers → Custom DNS**, enter both Cloudflare nameservers, and save.
-4. Wait for Cloudflare to email that the zone is **Active**. This usually takes minutes, and at most 24–48 hours. Check with `dig NS connor.works +short`.
-5. Optional, once active: enable DNSSEC in Cloudflare (**DNS → Settings**), then add the DS record it gives you in Namecheap (**Advanced DNS → DNSSEC**).
+1. **Cloudflare → Add a domain → Connect a domain → `connor.works`**, Free plan. Choose *Connect*, not *Transfer*: transferring moves the registration to Cloudflare Registrar, which this setup doesn't use.
+2. Let Cloudflare scan and import the existing records, then **delete all of Namecheap's defaults**. The record list should end up empty; the Railway records are added in 1.7.
 
-> **Note:** once nameservers move, Namecheap's free email forwarding stops working. If you used it, set up **Cloudflare Email Routing** instead.
+   | Imported record | What it is |
+   |---|---|
+   | `A @` (Namecheap IP) | Parking page. It would clash with the apex CNAME in 1.7. |
+   | `CNAME www → parkingpage.namecheap.com` | Parking page. |
+   | `MX @ → eforward1–5.registrar-servers.com` | Namecheap email forwarding. |
+   | `TXT @ "v=spf1 include:spf.efwd.registrar-servers.com ~all"` | SPF for that forwarding. |
+
+   The MX and TXT records stop working once the nameservers move anyway. If you need mail at `connor.works`, set up **Cloudflare → Email → Email Routing** after the zone is active; it adds its own MX and SPF records.
+3. Cloudflare shows two nameservers (e.g. `quincy.ns.cloudflare.com`, `roxy.ns.cloudflare.com`).
+4. **Namecheap → Domain List → connor.works → Manage.** Nameservers are a setting on the domain, not DNS records, so don't add them under Advanced DNS.
+   - If **DNSSEC** is on (Advanced DNS tab), turn it **off** first. A stale DS record breaks resolution after the nameserver switch.
+   - **Domain tab → Nameservers →** change *Namecheap BasicDNS* to **Custom DNS**, enter both Cloudflare nameservers, and click the green checkmark to save.
+5. Back in Cloudflare, click **Check nameservers**. Wait for the zone to show **Active** (Cloudflare also emails). This usually takes minutes, and at most 24–48 hours. Check with `dig NS connor.works +short`, which should list the Cloudflare nameservers.
+6. Optional, once active: enable DNSSEC in Cloudflare (**DNS → Settings**), then add the DS record it gives you in Namecheap (**Advanced DNS → DNSSEC**).
+
+> **While the zone is pending,** Cloudflare doesn't proxy anything. Its nameservers return proxied records' raw values (e.g. `100::`), and the Redirect Rules editor warns that `www` "may not be proxying traffic". Both are expected and clear up once the zone is Active.
 
 ### 1.7 Attach `connor.works` to the main site
 
-1. **`main-site` → Settings → Networking → Custom Domain → `connor.works`** (target port `3000`). Repeat for `www.connor.works`.
-2. Railway shows a **CNAME target** (e.g. `abc123.up.railway.app`) and a **TXT verification record** for each domain. Add them in **Cloudflare → DNS → Records**:
+Only the apex goes on Railway. `www` is redirected by Cloudflare and never reaches Railway, which saves a custom domain slot: Railway doesn't charge per custom domain, but the Trial plan allows 1 in total and Hobby allows 2 per service.
+
+1. **`main-site` → Settings → Networking → Custom Domain → `connor.works`** (target port `3000`). Don't add `www.connor.works`.
+2. Railway shows a **CNAME target** (e.g. `abc123.up.railway.app`) and a **TXT verification record**. Add them in **Cloudflare → DNS → Records**:
 
    | Type | Name | Content | Proxy |
    |---|---|---|---|
-   | CNAME | `@` | Railway's target for `connor.works` | DNS only (grey) at first |
-   | CNAME | `www` | Railway's target for `www.connor.works` | DNS only (grey) at first |
+   | CNAME | `@` | Railway's target | DNS only (grey) at first |
    | TXT | as shown (e.g. `_railway-verify`) | as shown | n/a |
-   | TXT | as shown for `www` | as shown | n/a |
 
-3. Wait until Railway shows both domains as verified, with a certificate issued (green check).
-4. **Choose the proxy mode:**
-   - **Simple:** leave the records grey (DNS only). Railway handles TLS end to end.
-   - **Cloudflare proxy (orange):** gives caching, analytics and redirect rules. If you switch it on, set **SSL/TLS → Overview → Full** first. "Flexible" causes infinite redirects.
-5. **Canonical host:** pick `https://connor.works`. Redirect `www`:
-   - Proxied: **Cloudflare → Rules → Redirect Rules**: hostname equals `www.connor.works` → dynamic `concat("https://connor.works", http.request.uri.path)`, 301, preserve query string.
-   - Not proxied: do the redirect in the main site (middleware or `redirects()` on host `www.connor.works`).
-6. Verify:
+   Cloudflare flattens the apex CNAME automatically. You can do this step while the zone is still pending; Railway shows the domain as unverified until it's Active.
+3. Wait until Railway shows the domain as verified, with a certificate issued (green check).
+4. **Set SSL/TLS → Overview → Full (strict)**, then switch the `@` record to **Proxied** (orange) if you want Cloudflare's caching and analytics in front of the apex. Railway's certificate is valid, so strict works. Never use "Flexible": it causes redirect loops. Leaving the apex grey (Railway handles TLS end to end) also works.
+5. **Redirect `www` to `https://connor.works` in Cloudflare:**
+   - **DNS → Records → Add:** type `AAAA`, name `www`, IPv6 `100::`, **Proxied** (orange). `100::` is a discard address: the record only exists so Cloudflare answers `www` requests itself.
+   - **Rules → Redirect Rules → Create rule**, using the **Redirect from WWW to root** template, or by hand: hostname equals `www.connor.works` → dynamic `concat("https://connor.works", http.request.uri.path)`, 301, preserve query string.
+   - If the editor warns that `www` "may not be proxying traffic" while the zone is pending, choose **Ignore and deploy rule anyway**.
+6. **Wait for Cloudflare's edge certificate.** After the zone goes Active, Cloudflare issues its Universal SSL certificate for `connor.works` and `*.connor.works`, usually within 15 minutes and at most 24 hours. Until then, proxied hosts fail the TLS handshake (Firefox: `SSL_ERROR_NO_CYPHER_OVERLAP`; curl: `sslv3 alert handshake failure`). Watch **SSL/TLS → Edge Certificates** until it shows **Active**.
+7. Verify:
    ```bash
-   dig connor.works +short
+   dig NS connor.works +short                      # quincy/roxy.ns.cloudflare.com (or your pair)
    curl -sI https://connor.works/api/health        # HTTP/2 200
-   curl -sI https://www.connor.works/              # 301 → https://connor.works/
+   curl -sI "https://www.connor.works/a?b=1"       # 301, location: https://connor.works/a?b=1
    ```
 
 ### 1.8 Images domain (when the first app needs R2)
 
-`img.connor.works` is separate from Railway: **Cloudflare → R2 → bucket → Settings → Custom Domains → Connect `img.connor.works`**. Cloudflare creates the DNS record itself. Each app's `R2_*` variables are set in Part 2.3.
+Skip this until an app stores images in R2 (Meridian Underground's gallery is the first). `img.connor.works` is separate from Railway.
+
+1. **Cloudflare → R2 Object Storage**, and enable it. Cloudflare asks for a payment method even on the free tier (10 GB storage, free egress).
+2. **Create bucket:** e.g. `connor-works-images`, location **Automatic**, storage class **Standard**.
+3. **Bucket → Settings → Custom Domains → Connect Domain → `img.connor.works`.** Cloudflare creates the DNS record and certificate itself; don't add one by hand. Leave the **r2.dev** public URL disabled, so the custom domain is the only public way in.
+4. **R2 → Manage API tokens → Create API token:** permission **Object Read & Write**, scoped to **this bucket only**. Save the **Access Key ID** and **Secret Access Key** in your password manager (the secret is shown once), plus the **Account ID** from the R2 overview page. They become the app's `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_BUCKET` in Part 2.3, with `R2_PUBLIC_BASE_URL=https://img.connor.works`.
+5. Test: upload a small file in the bucket's **Objects** tab, check `curl -sI https://img.connor.works/<file>` returns `200`, then delete the file.
+
+> **One bucket per custom domain, one bucket per token scope.** R2 tokens can't be limited to a folder, so every app sharing a bucket can overwrite every other app's images. That's fine while one app uses R2. When a second app needs images, give it its own bucket, token and subdomain (e.g. `mu-img.connor.works`), like it gets its own database. Each app already reads its own `R2_PUBLIC_BASE_URL`.
 
 ### 1.9 Optional: admin email notifications
 
@@ -151,7 +170,8 @@ If the main site implements `/api/notify` (`ARCHITECTURE.md` §12):
 
 ### 1.10 First-deploy checklist
 
-- [ ] `https://connor.works` serves the main site over HTTPS. `www` redirects to it.
+- [ ] `https://connor.works` serves the main site over HTTPS. `www` redirects to it with a 301, keeping the path and query string.
+- [ ] Cloudflare SSL/TLS mode is **Full (strict)**.
 - [ ] `/api/health`, `/robots.txt`, `/sitemap.xml` and `/favicon.ico` all respond.
 - [ ] The `Postgres` service is running, and backups are enabled if available.
 - [ ] Every secret is also saved in your password manager.
@@ -420,4 +440,4 @@ curl -sI https://connor.works/<healthPath>    # health check through the domain
 
 ### 4.3 When something goes wrong
 
-See `ARCHITECTURE.md` §13 for the symptom → fix table: unstyled child pages, 404s/502s on child prefixes, Server Action errors, redirect loops, migration permission errors, and too many connections.
+See `ARCHITECTURE.md` §13 for the symptom → fix table: unstyled child pages, 404s/502s on child prefixes, Server Action errors, TLS handshake failures, redirect loops, migration permission errors, and too many connections.
