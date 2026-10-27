@@ -19,8 +19,9 @@ export const projects: Project[] = [
     title: 'Meridian Underground',
     description: 'A home theater showcase, a public movie collection, and movie-night invitations with RSVPs.',
     href: '/meridian-underground',
-    image: '/projects/placeholder.webp',
-    imageAlt: 'Placeholder image',
+    image: '/projects/meridian-underground.webp',
+    imageAlt:
+      'View from behind the main seats: a projection screen flanked by tower speakers and subwoofers, with speakers mounted overhead',
     highlightColor: '#244653',
     listed: true,
   },
