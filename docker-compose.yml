@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:18 # match the major version of Railway's Postgres service
+    restart: unless-stopped
+    ports:
+      - '5432:5432' # change to "5433:5432" if something else already uses 5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql # postgres:18+ path; 17 and older used /var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:
